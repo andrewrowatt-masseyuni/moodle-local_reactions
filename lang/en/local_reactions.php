@@ -25,20 +25,20 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'Reactions';
-$string['reactions:react'] = 'React to forum posts with emoji';
-$string['reactions:view'] = 'View emoji reactions on forum posts';
-$string['settings:enabled'] = 'Enable reactions';
-$string['settings:enabled_desc'] = 'When enabled, emoji reaction buttons will appear on forum posts.';
-$string['settings:emojis'] = 'Emoji set';
-$string['settings:emojis_desc'] = 'Comma-separated list of shortcode:emoji pairs. For example: thumbsup:👍,heart:❤️,laugh:😂';
-$string['reacttothispost'] = 'React to this post';
-$string['removereaction'] = 'Remove your {$a} reaction';
 $string['addreaction'] = 'React with {$a}';
-$string['reactionssettings'] = 'Reactions';
 $string['enablereactions'] = 'Enable emoji reactions';
 $string['enablereactions_help'] = 'When enabled, users can react to forum posts with emoji. Reactions are anonymous — only counts are displayed.';
+$string['pluginname'] = 'Reactions';
 $string['privacy:metadata:local_reactions'] = 'Stores emoji reactions made by users on forum posts.';
-$string['privacy:metadata:local_reactions:userid'] = 'The ID of the user who reacted.';
 $string['privacy:metadata:local_reactions:emoji'] = 'The emoji reaction chosen.';
 $string['privacy:metadata:local_reactions:timecreated'] = 'The time the reaction was made.';
+$string['privacy:metadata:local_reactions:userid'] = 'The ID of the user who reacted.';
+$string['reactions:react'] = 'React to forum posts with emoji';
+$string['reactions:view'] = 'View emoji reactions on forum posts';
+$string['reactionssettings'] = 'Reactions';
+$string['reacttothispost'] = 'React to this post';
+$string['removereaction'] = 'Remove your {$a} reaction';
+$string['settings:emojis'] = 'Emoji set';
+$string['settings:emojis_desc'] = 'Comma-separated list of shortcode:emoji pairs. For example: thumbsup:👍,heart:❤️,laugh:😂';
+$string['settings:enabled'] = 'Enable reactions';
+$string['settings:enabled_desc'] = 'When enabled, emoji reaction buttons will appear on forum posts.';

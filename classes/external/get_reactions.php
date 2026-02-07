@@ -31,7 +31,6 @@ use local_reactions\manager;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class get_reactions extends external_api {
-
     /**
      * Parameters definition.
      *
@@ -57,8 +56,12 @@ class get_reactions extends external_api {
      * @param int $contextid
      * @return array
      */
-    public static function execute(string $component, string $itemtype, array $itemids,
-            int $contextid): array {
+    public static function execute(
+        string $component,
+        string $itemtype,
+        array $itemids,
+        int $contextid
+    ): array {
         global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [

@@ -31,7 +31,6 @@ use local_reactions\manager;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class toggle_reaction extends external_api {
-
     /**
      * Parameters definition.
      *
@@ -55,8 +54,12 @@ class toggle_reaction extends external_api {
      * @param string $emoji
      * @return array
      */
-    public static function execute(string $component, string $itemtype, int $itemid,
-            string $emoji): array {
+    public static function execute(
+        string $component,
+        string $itemtype,
+        int $itemid,
+        string $emoji
+    ): array {
         global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [

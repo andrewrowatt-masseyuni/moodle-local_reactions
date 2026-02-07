@@ -24,7 +24,6 @@ namespace local_reactions;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class manager {
-
     /** @var string Default emoji set as comma-separated shortcode:unicode pairs. */
     const DEFAULT_EMOJIS = 'thumbsup:👍,heart:❤️,laugh:😂,think:🤔,celebrate:🎉,surprise:😮';
 
@@ -61,8 +60,13 @@ class manager {
      * @param string $emoji Emoji shortcode.
      * @return array ['action' => 'added'|'removed', 'emoji' => string]
      */
-    public static function toggle_reaction(string $component, string $itemtype, int $itemid,
-            int $userid, string $emoji): array {
+    public static function toggle_reaction(
+        string $component,
+        string $itemtype,
+        int $itemid,
+        int $userid,
+        string $emoji
+    ): array {
         global $DB;
 
         // Validate emoji is in the configured set.
@@ -106,8 +110,12 @@ class manager {
      * @param int $userid Current user ID.
      * @return array Keyed by itemid, each containing 'counts' and 'userreactions'.
      */
-    public static function get_reactions(string $component, string $itemtype, array $itemids,
-            int $userid): array {
+    public static function get_reactions(
+        string $component,
+        string $itemtype,
+        array $itemids,
+        int $userid
+    ): array {
         global $DB;
 
         if (empty($itemids)) {
@@ -123,7 +131,7 @@ class manager {
         }
 
         // Get counts per emoji per item.
-        list($insql, $params) = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
+        [$insql, $params] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED);
         $params['component'] = $component;
         $params['itemtype'] = $itemtype;
 

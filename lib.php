@@ -42,11 +42,17 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
         return;
     }
 
-    $mform->addElement('header', 'local_reactions_header',
-        get_string('reactionssettings', 'local_reactions'));
+    $mform->addElement(
+        'header',
+        'local_reactions_header',
+        get_string('reactionssettings', 'local_reactions')
+    );
 
-    $mform->addElement('checkbox', 'local_reactions_enabled',
-        get_string('enablereactions', 'local_reactions'));
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_enabled',
+        get_string('enablereactions', 'local_reactions')
+    );
     $mform->addHelpButton('local_reactions_enabled', 'enablereactions', 'local_reactions');
 
     // Set current value from the database.

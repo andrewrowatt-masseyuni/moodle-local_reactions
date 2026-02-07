@@ -1,0 +1,66 @@
+/* Reactions bar container */
+.local-reactions-bar {
+    gap: 4px;
+    padding: 2px 0;
+}
+
+/* Individual reaction button - Teams-style pill */
+.local-reactions-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid #d1d1d1;
+    border-radius: 16px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.local-reactions-btn:hover:not(:disabled) {
+    background: #e8e8e8;
+    border-color: #b3b3b3;
+}
+
+.local-reactions-btn:disabled {
+    cursor: default;
+    opacity: 0.8;
+}
+
+/* Selected state - highlighted like Teams active reaction */
+.local-reactions-btn.local-reactions-selected {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    color: #1a73e8;
+}
+
+.local-reactions-btn.local-reactions-selected:hover:not(:disabled) {
+    background: #d2e3fc;
+    border-color: #1557b0;
+}
+
+/* Emoji character */
+.local-reactions-emoji {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* Count number */
+.local-reactions-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-width: 0;
+}
+
+.local-reactions-count:empty {
+    display: none;
+}
+
+/* Hide buttons with no count when user cannot react */
+.local-reactions-btn.local-reactions-empty {
+    display: none;
+}

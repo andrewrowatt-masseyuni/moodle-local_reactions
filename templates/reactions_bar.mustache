@@ -1,0 +1,51 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_reactions/reactions_bar
+
+    Inline emoji reactions bar for forum posts (Teams-style).
+
+    Classes required for JS:
+    * [data-region="reactions-bar"]
+    * [data-action="toggle-reaction"]
+    * [data-region="reaction-count"]
+
+    Example context (json):
+    {
+        "canreact": true,
+        "buttons": [
+            {"shortcode": "thumbsup", "unicode": "\ud83d\udc4d", "count": 3, "hascount": true, "selected": true, "canreact": true},
+            {"shortcode": "heart", "unicode": "\u2764\ufe0f", "count": 0, "hascount": false, "selected": false, "canreact": true}
+        ]
+    }
+}}
+<div class="local-reactions-bar d-flex flex-wrap align-items-center mt-2 mb-1" data-region="reactions-bar">
+    {{#buttons}}
+        <button
+            type="button"
+            class="local-reactions-btn{{#selected}} local-reactions-selected{{/selected}}{{^hascount}}{{^canreact}} local-reactions-empty{{/canreact}}{{/hascount}}"
+            data-action="toggle-reaction"
+            data-emoji="{{shortcode}}"
+            aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
+            aria-label="{{unicode}}"
+            {{^canreact}}disabled{{/canreact}}
+        >
+            <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
+            <span class="local-reactions-count" data-region="reaction-count">{{#hascount}}{{count}}{{/hascount}}</span>
+        </button>
+    {{/buttons}}
+</div>

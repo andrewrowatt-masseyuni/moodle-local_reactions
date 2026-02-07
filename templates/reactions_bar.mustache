@@ -17,11 +17,13 @@
 {{!
     @template local_reactions/reactions_bar
 
-    Inline emoji reactions bar for forum posts (Teams-style).
+    GitHub-style emoji reactions bar with trigger button and popup picker.
 
     Classes required for JS:
     * [data-region="reactions-bar"]
     * [data-action="toggle-reaction"]
+    * [data-action="open-picker"]
+    * [data-region="reactions-picker"]
     * [data-region="reaction-count"]
 
     Example context (json):
@@ -34,18 +36,50 @@
     }
 }}
 <div class="local-reactions-bar d-flex flex-wrap align-items-center mt-2 mb-1" data-region="reactions-bar">
+    {{! Smiley trigger button to open the emoji picker }}
+    {{#canreact}}
+        <div class="local-reactions-picker-wrapper">
+            <button
+                type="button"
+                class="local-reactions-trigger"
+                data-action="open-picker"
+                aria-label="{{#str}} reacttothispost, local_reactions {{/str}}"
+                aria-expanded="false"
+            >
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm3.82 1.636a.75.75 0 0 1 1.038.175l.007.009c.103.118.22.222.35.31.264.178.683.37 1.285.37.602 0 1.02-.192 1.285-.371.13-.088.247-.192.35-.31l.007-.008a.75.75 0 0 1 1.222.87l-.022.03c-.2.247-.46.47-.786.656-.652.374-1.404.583-2.056.583-.652 0-1.404-.21-2.056-.584a3.56 3.56 0 0 1-.786-.655l-.022-.031a.75.75 0 0 1 .184-1.043ZM6 6.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm6 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
+            </button>
+            <div class="local-reactions-picker" data-region="reactions-picker" role="menu" hidden>
+                {{#buttons}}
+                    <button
+                        type="button"
+                        class="local-reactions-picker-btn{{#selected}} local-reactions-selected{{/selected}}"
+                        data-action="toggle-reaction"
+                        data-emoji="{{shortcode}}"
+                        role="menuitem"
+                        aria-label="{{unicode}}"
+                    >
+                        <span aria-hidden="true">{{unicode}}</span>
+                    </button>
+                {{/buttons}}
+            </div>
+        </div>
+    {{/canreact}}
+
+    {{! Active reaction pills (only shown when they have counts) }}
     {{#buttons}}
-        <button
-            type="button"
-            class="local-reactions-btn{{#selected}} local-reactions-selected{{/selected}}{{^hascount}}{{^canreact}} local-reactions-empty{{/canreact}}{{/hascount}}"
-            data-action="toggle-reaction"
-            data-emoji="{{shortcode}}"
-            aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
-            aria-label="{{unicode}}"
-            {{^canreact}}disabled{{/canreact}}
-        >
-            <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
-            <span class="local-reactions-count" data-region="reaction-count">{{#hascount}}{{count}}{{/hascount}}</span>
-        </button>
+        {{#hascount}}
+            <button
+                type="button"
+                class="local-reactions-pill{{#selected}} local-reactions-selected{{/selected}}"
+                data-action="toggle-reaction"
+                data-emoji="{{shortcode}}"
+                aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
+                aria-label="{{unicode}} {{count}}"
+                {{^canreact}}disabled{{/canreact}}
+            >
+                <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
+                <span class="local-reactions-count" data-region="reaction-count">{{count}}</span>
+            </button>
+        {{/hascount}}
     {{/buttons}}
 </div>

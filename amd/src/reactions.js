@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * AMD module for emoji reactions on forum posts.
+ * AMD module for emoji reactions on forum posts (GitHub-style picker).
  *
  * @module     local_reactions/reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
@@ -32,32 +32,47 @@ let config = {};
  * Initialise the reactions module.
  *
  * @param {Object} cfg Configuration from PHP.
- * @param {number} cfg.contextid The module context ID.
- * @param {string} cfg.component Component name e.g. mod_forum.
- * @param {string} cfg.itemtype Item type e.g. post.
- * @param {boolean} cfg.canreact Whether the user can react.
- * @param {Object} cfg.emojis Emoji set as shortcode:unicode map.
  */
 export const init = (cfg) => {
     config = cfg;
     loadReactions();
 
-    // Also re-load when new replies are dynamically added.
-    const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-            for (const node of mutation.addedNodes) {
-                if (node.nodeType === Node.ELEMENT_NODE && node.querySelector('article[data-post-id]')) {
-                    loadReactions();
-                    return;
-                }
-            }
+    // Close any open picker when clicking outside.
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.local-reactions-picker-wrapper')) {
+            closeAllPickers();
         }
     });
 
+    // Re-load when new replies are dynamically added.
     const container = document.querySelector('[data-content="forum-discussion"]');
     if (container) {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE && node.querySelector('article[data-post-id]')) {
+                        loadReactions();
+                        return;
+                    }
+                }
+            }
+        });
         observer.observe(container, {childList: true, subtree: true});
     }
+};
+
+/**
+ * Close all open emoji pickers.
+ */
+const closeAllPickers = () => {
+    document.querySelectorAll('[data-region="reactions-picker"]:not([hidden])').forEach((picker) => {
+        picker.hidden = true;
+        const trigger = picker.closest('.local-reactions-picker-wrapper')
+            ?.querySelector('[data-action="open-picker"]');
+        if (trigger) {
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+    });
 };
 
 /**
@@ -69,7 +84,6 @@ const loadReactions = async() => {
         return;
     }
 
-    // Collect post IDs that don't already have a reactions bar.
     const postIds = [];
     articles.forEach((article) => {
         const postId = parseInt(article.getAttribute('data-post-id'));
@@ -93,13 +107,11 @@ const loadReactions = async() => {
             },
         }])[0];
 
-        // Build a lookup map.
         const reactionsMap = {};
         response.items.forEach((item) => {
             reactionsMap[item.itemid] = item;
         });
 
-        // Render a bar for each post.
         for (const postId of postIds) {
             const data = reactionsMap[postId] || {itemid: postId, userreaction: '', counts: []};
             await renderBar(postId, data);
@@ -117,12 +129,7 @@ const loadReactions = async() => {
  */
 const renderBar = async(postId, data) => {
     const article = document.querySelector(`article[data-post-id="${postId}"]`);
-    if (!article) {
-        return;
-    }
-
-    // Don't double-render.
-    if (article.querySelector('[data-region="reactions-bar"]')) {
+    if (!article || article.querySelector('[data-region="reactions-bar"]')) {
         return;
     }
 
@@ -137,7 +144,6 @@ const renderBar = async(postId, data) => {
         // Try to insert alongside the post actions (reply posts).
         const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
         if (actionsContainer) {
-            // Insert before the actions within the shared flex-wrap parent.
             actionsContainer.parentElement.insertBefore(barElement, actionsContainer);
         } else {
             // Fallback for first post: append to the post core column.
@@ -148,11 +154,7 @@ const renderBar = async(postId, data) => {
             postCore.appendChild(barElement);
         }
         Templates.runTemplateJS(js);
-
-        // Bind click handlers if the user can react.
-        if (config.canreact) {
-            bindClickHandlers(barElement, postId);
-        }
+        bindHandlers(barElement, postId);
     } catch (err) {
         Notification.exception(err);
     }
@@ -165,13 +167,11 @@ const renderBar = async(postId, data) => {
  * @returns {Object} Template context.
  */
 const buildTemplateContext = (data) => {
-    // Build a counts lookup.
     const countsMap = {};
     data.counts.forEach((c) => {
         countsMap[c.emoji] = c.count;
     });
 
-    // Build emoji buttons from the configured set.
     const buttons = [];
     for (const [shortcode, unicode] of Object.entries(config.emojis)) {
         const count = countsMap[shortcode] || 0;
@@ -193,32 +193,54 @@ const buildTemplateContext = (data) => {
 };
 
 /**
- * Bind click handlers to emoji buttons within a reactions bar.
+ * Bind all event handlers for a reactions bar.
  *
  * @param {HTMLElement} barElement The reactions bar container.
  * @param {number} postId The forum post ID.
  */
-const bindClickHandlers = (barElement, postId) => {
-    barElement.querySelectorAll('[data-action="toggle-reaction"]').forEach((btn) => {
-        btn.addEventListener('click', async(e) => {
-            e.preventDefault();
-            const emoji = btn.getAttribute('data-emoji');
-            await toggleReaction(postId, emoji, barElement);
+const bindHandlers = (barElement, postId) => {
+    // Picker trigger button.
+    const trigger = barElement.querySelector('[data-action="open-picker"]');
+    if (trigger) {
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const picker = barElement.querySelector('[data-region="reactions-picker"]');
+            if (!picker) {
+                return;
+            }
+            const isOpen = !picker.hidden;
+            closeAllPickers();
+            if (!isOpen) {
+                picker.hidden = false;
+                trigger.setAttribute('aria-expanded', 'true');
+            }
         });
-    });
+    }
+
+    // All toggle-reaction buttons (pills + picker buttons).
+    if (config.canreact) {
+        barElement.querySelectorAll('[data-action="toggle-reaction"]').forEach((btn) => {
+            btn.addEventListener('click', async(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                closeAllPickers();
+                const emoji = btn.getAttribute('data-emoji');
+                await toggleReaction(postId, emoji, barElement);
+            });
+        });
+    }
 };
 
 /**
- * Toggle a reaction via the web service and update the UI.
+ * Toggle a reaction via the web service and rebuild the bar.
  *
  * @param {number} postId The forum post ID.
  * @param {string} emoji The emoji shortcode.
- * @param {HTMLElement} barElement The reactions bar to update.
+ * @param {HTMLElement} barElement The reactions bar to replace.
  */
 const toggleReaction = async(postId, emoji, barElement) => {
-    // Disable buttons while request is in flight.
-    const buttons = barElement.querySelectorAll('[data-action="toggle-reaction"]');
-    buttons.forEach((b) => b.setAttribute('disabled', 'disabled'));
+    // Disable all interactive elements during the request.
+    barElement.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', 'disabled'));
 
     try {
         const response = await Ajax.call([{
@@ -231,53 +253,22 @@ const toggleReaction = async(postId, emoji, barElement) => {
             },
         }])[0];
 
-        // Update the bar in-place.
-        updateBar(barElement, response);
+        // Rebuild the bar with fresh data to correctly show/hide pills.
+        const context = buildTemplateContext({
+            userreaction: response.userreaction,
+            counts: response.counts,
+        });
+        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        const newBar = container.firstElementChild;
+
+        barElement.replaceWith(newBar);
+        Templates.runTemplateJS(js);
+        bindHandlers(newBar, postId);
     } catch (err) {
         Notification.exception(err);
-    } finally {
-        buttons.forEach((b) => b.removeAttribute('disabled'));
+        // Re-enable buttons on error.
+        barElement.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
     }
-};
-
-/**
- * Update the reactions bar UI after a toggle response.
- *
- * @param {HTMLElement} barElement The reactions bar container.
- * @param {Object} response Response from toggle_reaction WS.
- */
-const updateBar = (barElement, response) => {
-    // Build counts lookup from response.
-    const countsMap = {};
-    response.counts.forEach((c) => {
-        countsMap[c.emoji] = c.count;
-    });
-
-    barElement.querySelectorAll('[data-action="toggle-reaction"]').forEach((btn) => {
-        const shortcode = btn.getAttribute('data-emoji');
-        const count = countsMap[shortcode] || 0;
-        const isSelected = response.userreaction === shortcode;
-
-        // Update count display.
-        const countEl = btn.querySelector('[data-region="reaction-count"]');
-        if (countEl) {
-            countEl.textContent = count > 0 ? count : '';
-        }
-
-        // Update selected state.
-        if (isSelected) {
-            btn.classList.add('local-reactions-selected');
-            btn.setAttribute('aria-pressed', 'true');
-        } else {
-            btn.classList.remove('local-reactions-selected');
-            btn.setAttribute('aria-pressed', 'false');
-        }
-
-        // Show/hide based on whether there's a count or user can react.
-        if (count > 0 || config.canreact) {
-            btn.classList.remove('local-reactions-empty');
-        } else {
-            btn.classList.add('local-reactions-empty');
-        }
-    });
 };

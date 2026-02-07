@@ -17,7 +17,7 @@
 namespace local_reactions\hooks\output;
 
 /**
- * Hook callback to inject reactions JS on forum discussion pages.
+ * Hook callback to inject reactions JS on forum pages.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
@@ -25,7 +25,7 @@ namespace local_reactions\hooks\output;
  */
 class before_footer_html_generation {
     /**
-     * Inject the reactions AMD module on forum discussion pages.
+     * Inject the reactions AMD module on forum pages.
      *
      * @param \core\hook\output\before_footer_html_generation $hook
      */
@@ -36,8 +36,9 @@ class before_footer_html_generation {
             return;
         }
 
-        // Only load on forum discussion pages.
-        if ($PAGE->pagetype !== 'mod-forum-discuss') {
+        // Only load on forum pages.
+        $pagetype = $PAGE->pagetype;
+        if ($pagetype !== 'mod-forum-discuss' && $pagetype !== 'mod-forum-view') {
             return;
         }
 
@@ -57,17 +58,31 @@ class before_footer_html_generation {
             return;
         }
 
-        $canreact = has_capability('local/reactions:react', $context);
         $emojiset = \local_reactions\manager::get_emoji_set();
 
-        $PAGE->requires->js_call_amd('local_reactions/reactions', 'init', [
-            [
-                'contextid' => $context->id,
-                'component' => 'mod_forum',
-                'itemtype' => 'post',
-                'canreact' => $canreact,
-                'emojis' => $emojiset,
-            ],
-        ]);
+        if ($pagetype === 'mod-forum-discuss') {
+            // Individual discussion page: full interactive reactions.
+            $canreact = has_capability('local/reactions:react', $context);
+
+            $PAGE->requires->js_call_amd('local_reactions/reactions', 'init', [
+                [
+                    'contextid' => $context->id,
+                    'component' => 'mod_forum',
+                    'itemtype' => 'post',
+                    'canreact' => $canreact,
+                    'emojis' => $emojiset,
+                ],
+            ]);
+        } else if ($pagetype === 'mod-forum-view') {
+            // Discussion list page: read-only aggregated reaction pills.
+            $PAGE->requires->js_call_amd('local_reactions/discussion_list_reactions', 'init', [
+                [
+                    'contextid' => $context->id,
+                    'component' => 'mod_forum',
+                    'itemtype' => 'post',
+                    'emojis' => $emojiset,
+                ],
+            ]);
+        }
     }
 }

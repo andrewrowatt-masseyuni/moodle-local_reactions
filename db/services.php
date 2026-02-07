@@ -39,4 +39,11 @@ $functions = [
         'ajax' => true,
         'loginrequired' => true,
     ],
+    'local_reactions_get_discussion_reactions' => [
+        'classname' => 'local_reactions\external\get_discussion_reactions',
+        'description' => 'Get aggregated emoji reactions for forum discussions',
+        'type' => 'read',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
 ];

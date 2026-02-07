@@ -164,4 +164,57 @@ class manager {
 
         return $result;
     }
+
+    /**
+     * Get aggregated reaction counts across all posts in the given discussions.
+     *
+     * Unlike get_reactions() which returns per-post data, this method
+     * aggregates across all posts belonging to each discussion.
+     *
+     * @param string $component Component name e.g. mod_forum.
+     * @param string $itemtype Item type e.g. post.
+     * @param array $discussionids Array of forum_discussions IDs.
+     * @return array Keyed by discussionid, each containing 'counts' as emoji => total.
+     */
+    public static function get_reactions_by_discussions(
+        string $component,
+        string $itemtype,
+        array $discussionids
+    ): array {
+        global $DB;
+
+        if (empty($discussionids)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($discussionids as $discussionid) {
+            $result[$discussionid] = [
+                'counts' => [],
+            ];
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($discussionids, SQL_PARAMS_NAMED);
+        $params['component'] = $component;
+        $params['itemtype'] = $itemtype;
+
+        $sql = "SELECT CONCAT(fp.discussion, '_', r.emoji) AS uid,
+                       fp.discussion AS discussionid,
+                       r.emoji,
+                       COUNT(*) AS total
+                  FROM {local_reactions} r
+                  JOIN {forum_posts} fp ON r.itemid = fp.id
+                 WHERE r.component = :component
+                   AND r.itemtype = :itemtype
+                   AND fp.discussion $insql
+              GROUP BY fp.discussion, r.emoji
+              ORDER BY fp.discussion, total DESC";
+
+        $counts = $DB->get_records_sql($sql, $params);
+        foreach ($counts as $row) {
+            $result[$row->discussionid]['counts'][$row->emoji] = (int) $row->total;
+        }
+
+        return $result;
+    }
 }

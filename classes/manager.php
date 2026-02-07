@@ -25,7 +25,7 @@ namespace local_reactions;
  */
 class manager {
     /** @var string Default emoji set as comma-separated shortcode:unicode pairs. */
-    const DEFAULT_EMOJIS = 'thumbsup:👍,heart:❤️,laugh:😂,think:🤔,celebrate:🎉,surprise:😮';
+    const DEFAULT_EMOJIS = 'thumbsup:👍,heart:❤️,laugh:😂,think:🤔,celebrate:🎉,surprise:😮,thanks:🙏';
 
     /**
      * Get the configured emoji set.

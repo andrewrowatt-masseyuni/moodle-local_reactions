@@ -68,19 +68,6 @@
 
     {{! Active reaction pills (only shown when they have counts) }}
     {{#buttons}}
-        {{#hascount}}
-            <button
-                type="button"
-                class="local-reactions-pill{{#selected}} local-reactions-selected{{/selected}}"
-                data-action="toggle-reaction"
-                data-emoji="{{shortcode}}"
-                aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
-                aria-label="{{unicode}} {{count}}"
-                {{^canreact}}disabled{{/canreact}}
-            >
-                <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
-                <span class="local-reactions-count" data-region="reaction-count">{{count}}</span>
-            </button>
-        {{/hascount}}
+        {{> local_reactions/pill }}
     {{/buttons}}
 </div>

@@ -4,6 +4,14 @@
     padding: 2px 0;
 }
 
+/* Compact variant for discussion list */
+.local-reactions-bar-compact {
+    padding: 0;
+    gap: 3px;
+    transform: scale(0.8);
+    transform-origin: left center;
+}
+
 /* Reaction count pills (shown for emoji with counts) */
 .local-reactions-pill {
     display: inline-flex;

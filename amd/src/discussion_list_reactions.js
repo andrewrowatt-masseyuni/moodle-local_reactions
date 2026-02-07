@@ -107,16 +107,10 @@ const renderBar = async(discussionId, data) => {
     const context = buildTemplateContext(data);
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
+        const {html, js} = await Templates.renderForPromise('local_reactions/discussion_list_reactions', context);
         const container = document.createElement('div');
         container.innerHTML = html;
         const barElement = container.firstElementChild;
-
-        // Compact display for the discussion list: no vertical spacing, scaled down.
-        barElement.classList.remove('mt-2', 'mb-1');
-        barElement.style.padding = '0';
-        barElement.style.transform = 'scale(0.8)';
-        barElement.style.transformOrigin = 'left center';
 
         // Insert below the discussion title, after the locked/timed badges div.
         const topicTh = row.querySelector('th.topic');

@@ -95,3 +95,28 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
 
     return $data;
 }
+
+/**
+ * Extend course navigation to add reactions report link.
+ *
+ * @param navigation_node $navigation The navigation node to extend
+ * @param stdClass $course The course object
+ * @param context_course $context The course context
+ */
+function local_reactions_extend_navigation_course($navigation, $course, $context) {
+    if (!get_config('local_reactions', 'enabled')) {
+        return;
+    }
+
+    if (has_capability('local/reactions:viewreport', $context)) {
+        $url = new moodle_url('/local/reactions/report.php', ['id' => $course->id]);
+        $navigation->add(
+            get_string('reactionsreport', 'local_reactions'),
+            $url,
+            navigation_node::TYPE_SETTING,
+            null,
+            'reactionsreport',
+            new pix_icon('i/report', '')
+        );
+    }
+}

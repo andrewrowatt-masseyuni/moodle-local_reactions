@@ -60,7 +60,7 @@ if ($ratiodata['total_posts'] == 0) {
     echo html_writer::tag('p', 
         get_string('reactionsvspostratio', 'local_reactions') . ': ' . $ratiodata['ratio'] . ':1');
     echo html_writer::tag('p', 
-        html_writer::tag('em', 'Shows if students are reading but not contributing.'), 
+        html_writer::tag('em', get_string('engagementhint', 'local_reactions')), 
         ['class' => 'text-muted small']);
     echo html_writer::end_tag('div');
 
@@ -73,7 +73,7 @@ if ($ratiodata['total_posts'] == 0) {
     echo html_writer::tag('p', 
         get_string('activeposters', 'local_reactions') . ': ' . $participantdata['active_posters']);
     echo html_writer::tag('p', 
-        html_writer::tag('em', 'Identifies different participation styles.'), 
+        html_writer::tag('em', get_string('participationhint', 'local_reactions')), 
         ['class' => 'text-muted small']);
     echo html_writer::end_tag('div');
 
@@ -83,21 +83,21 @@ if ($ratiodata['total_posts'] == 0) {
     
     if (empty($zeroreactions)) {
         echo html_writer::tag('p', 
-            'All posts have received at least one reaction!', 
+            get_string('postswithallreactions', 'local_reactions'), 
             ['class' => 'alert alert-success']);
     } else {
         echo html_writer::tag('p', 
             get_string('postswithzeroreactions', 'local_reactions') . ': ' . count($zeroreactions));
         echo html_writer::tag('p', 
-            html_writer::tag('em', 'Might need teacher response to kickstart engagement.'), 
+            html_writer::tag('em', get_string('needsattentionhint', 'local_reactions')), 
             ['class' => 'text-muted small mb-2']);
         
         echo html_writer::start_tag('table', ['class' => 'table table-striped']);
         echo html_writer::start_tag('thead');
         echo html_writer::start_tag('tr');
-        echo html_writer::tag('th', 'Post');
-        echo html_writer::tag('th', 'Forum');
-        echo html_writer::tag('th', 'Date');
+        echo html_writer::tag('th', get_string('postheader', 'local_reactions'));
+        echo html_writer::tag('th', get_string('forumheader', 'local_reactions'));
+        echo html_writer::tag('th', get_string('dateheader', 'local_reactions'));
         echo html_writer::end_tag('tr');
         echo html_writer::end_tag('thead');
         echo html_writer::start_tag('tbody');
@@ -133,16 +133,16 @@ if ($ratiodata['total_posts'] == 0) {
         echo html_writer::tag('p', 
             get_string('mostreactedposts', 'local_reactions'));
         echo html_writer::tag('p', 
-            html_writer::tag('em', 'Quick pulse check on what\'s engaging students.'), 
+            html_writer::tag('em', get_string('topperformershint', 'local_reactions')), 
             ['class' => 'text-muted small mb-2']);
         
         echo html_writer::start_tag('table', ['class' => 'table table-striped']);
         echo html_writer::start_tag('thead');
         echo html_writer::start_tag('tr');
-        echo html_writer::tag('th', 'Post');
-        echo html_writer::tag('th', 'Forum');
-        echo html_writer::tag('th', 'Reactions');
-        echo html_writer::tag('th', 'Date');
+        echo html_writer::tag('th', get_string('postheader', 'local_reactions'));
+        echo html_writer::tag('th', get_string('forumheader', 'local_reactions'));
+        echo html_writer::tag('th', get_string('reactionsheader', 'local_reactions'));
+        echo html_writer::tag('th', get_string('dateheader', 'local_reactions'));
         echo html_writer::end_tag('tr');
         echo html_writer::end_tag('thead');
         echo html_writer::start_tag('tbody');

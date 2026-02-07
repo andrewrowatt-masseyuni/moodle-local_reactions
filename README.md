@@ -15,10 +15,6 @@ This local plugin adds an emoji reaction bar to forum posts, allowing users to r
 - Anonymous display (counts only), with full user logging in the database
 - Works with dynamically loaded inline replies via MutationObserver
 
-## Requirements ##
-
-- Moodle 4.5 (MOODLE_405_STABLE)
-
 ## Installing via uploaded ZIP file ##
 
 1. Log in to your Moodle site as an admin and go to _Site administration >

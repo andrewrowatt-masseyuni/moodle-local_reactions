@@ -193,7 +193,7 @@ class report {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($this->forumids, SQL_PARAMS_NAMED);
-        
+
         // Get timestamp for one week ago.
         $weekago = time() - (7 * 24 * 60 * 60);
         $params['weekago'] = $weekago;

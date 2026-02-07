@@ -53,45 +53,65 @@ if ($ratiodata['total_posts'] == 0) {
     echo html_writer::tag('p', get_string('noposts', 'local_reactions'), ['class' => 'alert alert-info']);
 } else {
     echo html_writer::start_tag('div', ['class' => 'mb-3']);
-    echo html_writer::tag('p', 
-        get_string('totalreactions', 'local_reactions') . ': ' . $ratiodata['total_reactions']);
-    echo html_writer::tag('p', 
-        get_string('totalposts', 'local_reactions') . ': ' . $ratiodata['total_posts']);
-    echo html_writer::tag('p', 
-        get_string('reactionsvspostratio', 'local_reactions') . ': ' . $ratiodata['ratio'] . ':1');
-    echo html_writer::tag('p', 
-        html_writer::tag('em', get_string('engagementhint', 'local_reactions')), 
-        ['class' => 'text-muted small']);
+    echo html_writer::tag(
+        'p',
+        get_string('totalreactions', 'local_reactions') . ': ' . $ratiodata['total_reactions']
+    );
+    echo html_writer::tag(
+        'p',
+        get_string('totalposts', 'local_reactions') . ': ' . $ratiodata['total_posts']
+    );
+    echo html_writer::tag(
+        'p',
+        get_string('reactionsvspostratio', 'local_reactions') . ': ' . $ratiodata['ratio'] . ':1'
+    );
+    echo html_writer::tag(
+        'p',
+        html_writer::tag('em', get_string('engagementhint', 'local_reactions')),
+        ['class' => 'text-muted small']
+    );
     echo html_writer::end_tag('div');
 
     // 2. Active reactors vs active posters.
     $participantdata = $report->get_active_participants();
     echo $OUTPUT->heading(get_string('report:activeparticipation', 'local_reactions'), 3);
     echo html_writer::start_tag('div', ['class' => 'mb-3']);
-    echo html_writer::tag('p', 
-        get_string('activereactors', 'local_reactions') . ': ' . $participantdata['active_reactors']);
-    echo html_writer::tag('p', 
-        get_string('activeposters', 'local_reactions') . ': ' . $participantdata['active_posters']);
-    echo html_writer::tag('p', 
-        html_writer::tag('em', get_string('participationhint', 'local_reactions')), 
-        ['class' => 'text-muted small']);
+    echo html_writer::tag(
+        'p',
+        get_string('activereactors', 'local_reactions') . ': ' . $participantdata['active_reactors']
+    );
+    echo html_writer::tag(
+        'p',
+        get_string('activeposters', 'local_reactions') . ': ' . $participantdata['active_posters']
+    );
+    echo html_writer::tag(
+        'p',
+        html_writer::tag('em', get_string('participationhint', 'local_reactions')),
+        ['class' => 'text-muted small']
+    );
     echo html_writer::end_tag('div');
 
     // 3. Posts with zero reactions.
     $zeroreactions = $report->get_posts_with_zero_reactions(20);
     echo $OUTPUT->heading(get_string('report:needsattention', 'local_reactions'), 3);
-    
+
     if (empty($zeroreactions)) {
-        echo html_writer::tag('p', 
-            get_string('postswithallreactions', 'local_reactions'), 
-            ['class' => 'alert alert-success']);
+        echo html_writer::tag(
+            'p',
+            get_string('postswithallreactions', 'local_reactions'),
+            ['class' => 'alert alert-success']
+        );
     } else {
-        echo html_writer::tag('p', 
-            get_string('postswithzeroreactions', 'local_reactions') . ': ' . count($zeroreactions));
-        echo html_writer::tag('p', 
-            html_writer::tag('em', get_string('needsattentionhint', 'local_reactions')), 
-            ['class' => 'text-muted small mb-2']);
-        
+        echo html_writer::tag(
+            'p',
+            get_string('postswithzeroreactions', 'local_reactions') . ': ' . count($zeroreactions)
+        );
+        echo html_writer::tag(
+            'p',
+            html_writer::tag('em', get_string('needsattentionhint', 'local_reactions')),
+            ['class' => 'text-muted small mb-2']
+        );
+
         echo html_writer::start_tag('table', ['class' => 'table table-striped']);
         echo html_writer::start_tag('thead');
         echo html_writer::start_tag('tr');
@@ -101,22 +121,26 @@ if ($ratiodata['total_posts'] == 0) {
         echo html_writer::end_tag('tr');
         echo html_writer::end_tag('thead');
         echo html_writer::start_tag('tbody');
-        
+
         foreach ($zeroreactions as $post) {
             $posturl = new moodle_url('/mod/forum/discuss.php', [
                 'd' => $post->discussionid,
             ], 'p' . $post->id);
             $forumurl = new moodle_url('/mod/forum/view.php', ['id' => $post->cmid]);
-            
+
             echo html_writer::start_tag('tr');
-            echo html_writer::tag('td', 
-                html_writer::link($posturl, format_string($post->subject)));
-            echo html_writer::tag('td', 
-                html_writer::link($forumurl, format_string($post->forumname)));
+            echo html_writer::tag(
+                'td',
+                html_writer::link($posturl, format_string($post->subject))
+            );
+            echo html_writer::tag(
+                'td',
+                html_writer::link($forumurl, format_string($post->forumname))
+            );
             echo html_writer::tag('td', userdate($post->created, get_string('strftimedatetimeshort')));
             echo html_writer::end_tag('tr');
         }
-        
+
         echo html_writer::end_tag('tbody');
         echo html_writer::end_tag('table');
     }
@@ -124,18 +148,24 @@ if ($ratiodata['total_posts'] == 0) {
     // 4. Most-reacted posts this week.
     $mostreacted = $report->get_most_reacted_posts_this_week(10);
     echo $OUTPUT->heading(get_string('report:topperformers', 'local_reactions'), 3);
-    
+
     if (empty($mostreacted)) {
-        echo html_writer::tag('p', 
-            get_string('noreactedposts', 'local_reactions'), 
-            ['class' => 'alert alert-info']);
+        echo html_writer::tag(
+            'p',
+            get_string('noreactedposts', 'local_reactions'),
+            ['class' => 'alert alert-info']
+        );
     } else {
-        echo html_writer::tag('p', 
-            get_string('mostreactedposts', 'local_reactions'));
-        echo html_writer::tag('p', 
-            html_writer::tag('em', get_string('topperformershint', 'local_reactions')), 
-            ['class' => 'text-muted small mb-2']);
-        
+        echo html_writer::tag(
+            'p',
+            get_string('mostreactedposts', 'local_reactions')
+        );
+        echo html_writer::tag(
+            'p',
+            html_writer::tag('em', get_string('topperformershint', 'local_reactions')),
+            ['class' => 'text-muted small mb-2']
+        );
+
         echo html_writer::start_tag('table', ['class' => 'table table-striped']);
         echo html_writer::start_tag('thead');
         echo html_writer::start_tag('tr');
@@ -146,23 +176,27 @@ if ($ratiodata['total_posts'] == 0) {
         echo html_writer::end_tag('tr');
         echo html_writer::end_tag('thead');
         echo html_writer::start_tag('tbody');
-        
+
         foreach ($mostreacted as $post) {
             $posturl = new moodle_url('/mod/forum/discuss.php', [
                 'd' => $post->discussionid,
             ], 'p' . $post->id);
             $forumurl = new moodle_url('/mod/forum/view.php', ['id' => $post->cmid]);
-            
+
             echo html_writer::start_tag('tr');
-            echo html_writer::tag('td', 
-                html_writer::link($posturl, format_string($post->subject)));
-            echo html_writer::tag('td', 
-                html_writer::link($forumurl, format_string($post->forumname)));
+            echo html_writer::tag(
+                'td',
+                html_writer::link($posturl, format_string($post->subject))
+            );
+            echo html_writer::tag(
+                'td',
+                html_writer::link($forumurl, format_string($post->forumname))
+            );
             echo html_writer::tag('td', $post->reactioncount);
             echo html_writer::tag('td', userdate($post->created, get_string('strftimedatetimeshort')));
             echo html_writer::end_tag('tr');
         }
-        
+
         echo html_writer::end_tag('tbody');
         echo html_writer::end_tag('table');
     }

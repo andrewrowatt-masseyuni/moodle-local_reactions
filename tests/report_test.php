@@ -37,7 +37,7 @@ final class report_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
-        
+
         // Enable reactions for this forum.
         $DB->insert_record('local_reactions_enabled', (object) [
             'cmid' => $cm->id,
@@ -51,7 +51,7 @@ final class report_test extends \advanced_testcase {
         // Create discussion and posts.
         $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
-        
+
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
         $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
@@ -65,7 +65,7 @@ final class report_test extends \advanced_testcase {
             'emoji' => 'thumbsup',
             'timecreated' => time(),
         ]);
-        
+
         $DB->insert_record('local_reactions', (object) [
             'component' => 'mod_forum',
             'itemtype' => 'post',
@@ -95,7 +95,7 @@ final class report_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
-        
+
         $DB->insert_record('local_reactions_enabled', (object) [
             'cmid' => $cm->id,
             'enabled' => 1,
@@ -109,7 +109,7 @@ final class report_test extends \advanced_testcase {
         // Create discussion and posts.
         $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
-        
+
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
         $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
@@ -143,7 +143,7 @@ final class report_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
-        
+
         $DB->insert_record('local_reactions_enabled', (object) [
             'cmid' => $cm->id,
             'enabled' => 1,
@@ -156,7 +156,7 @@ final class report_test extends \advanced_testcase {
         // Create discussion and posts.
         $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
-        
+
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
         $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
@@ -190,7 +190,7 @@ final class report_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
-        
+
         $DB->insert_record('local_reactions_enabled', (object) [
             'cmid' => $cm->id,
             'enabled' => 1,
@@ -203,7 +203,7 @@ final class report_test extends \advanced_testcase {
         // Create discussion and posts.
         $discussion = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
-        
+
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
         $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
@@ -218,7 +218,7 @@ final class report_test extends \advanced_testcase {
             'emoji' => 'thumbsup',
             'timecreated' => $thisweek,
         ]);
-        
+
         $DB->insert_record('local_reactions', (object) [
             'component' => 'mod_forum',
             'itemtype' => 'post',
@@ -227,7 +227,7 @@ final class report_test extends \advanced_testcase {
             'emoji' => 'heart',
             'timecreated' => $thisweek,
         ]);
-        
+
         $DB->insert_record('local_reactions', (object) [
             'component' => 'mod_forum',
             'itemtype' => 'post',

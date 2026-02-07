@@ -25,8 +25,8 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['activereactors'] = 'Active reactors';
 $string['activeposters'] = 'Active posters';
+$string['activereactors'] = 'Active reactors';
 $string['addreaction'] = 'React with {$a}';
 $string['dateheader'] = 'Date';
 $string['enablereactions'] = 'Enable emoji reactions';
@@ -49,10 +49,10 @@ $string['privacy:metadata:local_reactions:itemid'] = 'The ID of the item (e.g., 
 $string['privacy:metadata:local_reactions:itemtype'] = 'The type of item (e.g., post) being reacted to.';
 $string['privacy:metadata:local_reactions:timecreated'] = 'The time the reaction was made.';
 $string['privacy:metadata:local_reactions:userid'] = 'The ID of the user who reacted.';
-$string['reactionsheader'] = 'Reactions';
 $string['reactions:react'] = 'React to forum posts with emoji';
 $string['reactions:view'] = 'View emoji reactions on forum posts';
 $string['reactions:viewreport'] = 'View reactions report';
+$string['reactionsheader'] = 'Reactions';
 $string['reactionsreport'] = 'Reactions report';
 $string['reactionssettings'] = 'Reactions';
 $string['reactionsvspostratio'] = 'Reactions to posts ratio';
@@ -67,5 +67,5 @@ $string['settings:emojis_desc'] = 'Comma-separated list of shortcode:emoji pairs
 $string['settings:enabled'] = 'Enable reactions';
 $string['settings:enabled_desc'] = 'When enabled, emoji reaction buttons will appear on forum posts.';
 $string['topperformershint'] = 'Quick pulse check on what\'s engaging students.';
-$string['totalreactions'] = 'Total reactions';
 $string['totalposts'] = 'Total posts';
+$string['totalreactions'] = 'Total reactions';

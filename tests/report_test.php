@@ -39,10 +39,9 @@ final class report_test extends \advanced_testcase {
         $cm = get_coursemodule_from_instance('forum', $forum->id);
 
         // Enable reactions for this forum.
-        $DB->insert_record('local_reactions_enabled', (object) [
-            'cmid' => $cm->id,
-            'enabled' => 1,
-        ]);
+        $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $existing->enabled = 1;
+        $DB->update_record('local_reactions_enabled', $existing);
 
         // Create users.
         $user1 = $this->getDataGenerator()->create_user();
@@ -96,10 +95,10 @@ final class report_test extends \advanced_testcase {
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
 
-        $DB->insert_record('local_reactions_enabled', (object) [
-            'cmid' => $cm->id,
-            'enabled' => 1,
-        ]);
+        // Enable reactions for this forum.
+        $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $existing->enabled = 1;
+        $DB->update_record('local_reactions_enabled', $existing);
 
         // Create users.
         $user1 = $this->getDataGenerator()->create_user();
@@ -144,10 +143,10 @@ final class report_test extends \advanced_testcase {
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
 
-        $DB->insert_record('local_reactions_enabled', (object) [
-            'cmid' => $cm->id,
-            'enabled' => 1,
-        ]);
+        // Enable reactions for this forum.
+        $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $existing->enabled = 1;
+        $DB->update_record('local_reactions_enabled', $existing);
 
         // Create users.
         $user1 = $this->getDataGenerator()->create_user();
@@ -191,10 +190,10 @@ final class report_test extends \advanced_testcase {
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
 
-        $DB->insert_record('local_reactions_enabled', (object) [
-            'cmid' => $cm->id,
-            'enabled' => 1,
-        ]);
+        // Enable reactions for this forum.
+        $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $existing->enabled = 1;
+        $DB->update_record('local_reactions_enabled', $existing);
 
         // Create users.
         $user1 = $this->getDataGenerator()->create_user();

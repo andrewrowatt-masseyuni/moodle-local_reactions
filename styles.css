@@ -28,6 +28,10 @@
 
 .local-reactions-pill:disabled {
     cursor: default;
+    opacity: 1;
+    color: inherit;
+    background: #f5f5f5;
+    border-color: #d1d1d1;
 }
 
 .local-reactions-pill.local-reactions-selected {

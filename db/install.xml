@@ -19,7 +19,7 @@
         <KEY NAME="userid_fk" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="user_item_unique" UNIQUE="true" FIELDS="component, itemtype, itemid, userid" COMMENT="One reaction per user per item"/>
+        <INDEX NAME="user_item_emoji_unique" UNIQUE="true" FIELDS="component, itemtype, itemid, userid, emoji" COMMENT="One reaction per emoji per user per item"/>
         <INDEX NAME="item_lookup" UNIQUE="false" FIELDS="component, itemtype, itemid" COMMENT="Fast lookup of all reactions for an item"/>
       </INDEXES>
     </TABLE>

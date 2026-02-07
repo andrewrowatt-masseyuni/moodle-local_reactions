@@ -115,7 +115,7 @@ class toggle_reaction extends external_api {
 
         return [
             'action' => $result['action'],
-            'userreaction' => $itemreactions['userreaction'] ?? '',
+            'userreactions' => $itemreactions['userreactions'],
             'counts' => $counts,
         ];
     }
@@ -127,8 +127,10 @@ class toggle_reaction extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-            'action' => new external_value(PARAM_ALPHA, 'Action taken: added, removed, or changed'),
-            'userreaction' => new external_value(PARAM_ALPHANUMEXT, 'Current user reaction shortcode, empty if none'),
+            'action' => new external_value(PARAM_ALPHA, 'Action taken: added or removed'),
+            'userreactions' => new external_multiple_structure(
+                new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode')
+            ),
             'counts' => new external_multiple_structure(
                 new external_single_structure([
                     'emoji' => new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode'),

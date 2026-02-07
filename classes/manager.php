@@ -51,15 +51,15 @@ class manager {
     }
 
     /**
-     * Toggle a reaction. If the user already has the same emoji, remove it.
-     * If the user has a different emoji, replace it. If none, add it.
+     * Toggle a reaction. If the user already has this emoji on the item, remove it.
+     * Otherwise add it. Users can have multiple different emoji on the same item.
      *
      * @param string $component Component name e.g. mod_forum.
      * @param string $itemtype Item type e.g. post.
      * @param int $itemid Item ID.
      * @param int $userid User ID.
      * @param string $emoji Emoji shortcode.
-     * @return array ['action' => 'added'|'removed'|'changed', 'emoji' => string]
+     * @return array ['action' => 'added'|'removed', 'emoji' => string]
      */
     public static function toggle_reaction(string $component, string $itemtype, int $itemid,
             int $userid, string $emoji): array {
@@ -76,22 +76,15 @@ class manager {
             'itemtype' => $itemtype,
             'itemid' => $itemid,
             'userid' => $userid,
+            'emoji' => $emoji,
         ]);
 
         if ($existing) {
-            if ($existing->emoji === $emoji) {
-                // Same emoji - remove the reaction.
-                $DB->delete_records('local_reactions', ['id' => $existing->id]);
-                return ['action' => 'removed', 'emoji' => $emoji];
-            } else {
-                // Different emoji - update.
-                $existing->emoji = $emoji;
-                $existing->timecreated = time();
-                $DB->update_record('local_reactions', $existing);
-                return ['action' => 'changed', 'emoji' => $emoji];
-            }
+            // Already reacted with this emoji - remove it.
+            $DB->delete_records('local_reactions', ['id' => $existing->id]);
+            return ['action' => 'removed', 'emoji' => $emoji];
         } else {
-            // No existing reaction - add.
+            // Add the reaction.
             $record = new \stdClass();
             $record->component = $component;
             $record->itemtype = $itemtype;
@@ -105,13 +98,13 @@ class manager {
     }
 
     /**
-     * Get reaction counts and the current user's reaction for multiple items.
+     * Get reaction counts and the current user's reactions for multiple items.
      *
      * @param string $component Component name.
      * @param string $itemtype Item type.
      * @param array $itemids Array of item IDs.
      * @param int $userid Current user ID.
-     * @return array Keyed by itemid, each containing 'counts' and 'userreaction'.
+     * @return array Keyed by itemid, each containing 'counts' and 'userreactions'.
      */
     public static function get_reactions(string $component, string $itemtype, array $itemids,
             int $userid): array {
@@ -125,7 +118,7 @@ class manager {
         foreach ($itemids as $itemid) {
             $result[$itemid] = [
                 'counts' => [],
-                'userreaction' => null,
+                'userreactions' => [],
             ];
         }
 
@@ -134,7 +127,7 @@ class manager {
         $params['component'] = $component;
         $params['itemtype'] = $itemtype;
 
-        $sql = "SELECT itemid, emoji, COUNT(*) as total
+        $sql = "SELECT CONCAT(itemid, '_', emoji) AS uid, itemid, emoji, COUNT(*) as total
                   FROM {local_reactions}
                  WHERE component = :component
                    AND itemtype = :itemtype
@@ -149,7 +142,7 @@ class manager {
 
         // Get current user's reactions.
         $params['userid'] = $userid;
-        $sql = "SELECT itemid, emoji
+        $sql = "SELECT id, itemid, emoji
                   FROM {local_reactions}
                  WHERE component = :component
                    AND itemtype = :itemtype
@@ -158,7 +151,7 @@ class manager {
 
         $userreactions = $DB->get_records_sql($sql, $params);
         foreach ($userreactions as $row) {
-            $result[$row->itemid]['userreaction'] = $row->emoji;
+            $result[$row->itemid]['userreactions'][] = $row->emoji;
         }
 
         return $result;

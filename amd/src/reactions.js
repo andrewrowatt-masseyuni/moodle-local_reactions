@@ -113,7 +113,7 @@ const loadReactions = async() => {
         });
 
         for (const postId of postIds) {
-            const data = reactionsMap[postId] || {itemid: postId, userreaction: '', counts: []};
+            const data = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
             await renderBar(postId, data);
         }
     } catch (err) {
@@ -172,10 +172,11 @@ const buildTemplateContext = (data) => {
         countsMap[c.emoji] = c.count;
     });
 
+    const userReactions = data.userreactions || [];
     const buttons = [];
     for (const [shortcode, unicode] of Object.entries(config.emojis)) {
         const count = countsMap[shortcode] || 0;
-        const isSelected = data.userreaction === shortcode;
+        const isSelected = userReactions.includes(shortcode);
         buttons.push({
             shortcode: shortcode,
             unicode: unicode,
@@ -211,7 +212,13 @@ const bindHandlers = (barElement, postId) => {
             const isOpen = !picker.hidden;
             closeAllPickers();
             if (!isOpen) {
+                // Position the picker using fixed coordinates to escape overflow:hidden parents.
+                const rect = trigger.getBoundingClientRect();
+                picker.style.left = rect.left + 'px';
+                picker.style.top = (rect.top - picker.offsetHeight - 6) + 'px';
                 picker.hidden = false;
+                // Re-calculate now that it's visible and has a real height.
+                picker.style.top = (rect.top - picker.offsetHeight - 6) + 'px';
                 trigger.setAttribute('aria-expanded', 'true');
             }
         });
@@ -255,7 +262,7 @@ const toggleReaction = async(postId, emoji, barElement) => {
 
         // Rebuild the bar with fresh data to correctly show/hide pills.
         const context = buildTemplateContext({
-            userreaction: response.userreaction,
+            userreactions: response.userreactions,
             counts: response.counts,
         });
         const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);

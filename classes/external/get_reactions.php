@@ -90,7 +90,7 @@ class get_reactions extends external_api {
             }
             $items[] = [
                 'itemid' => $itemid,
-                'userreaction' => $data['userreaction'] ?? '',
+                'userreactions' => $data['userreactions'],
                 'counts' => $counts,
             ];
         }
@@ -108,7 +108,9 @@ class get_reactions extends external_api {
             'items' => new external_multiple_structure(
                 new external_single_structure([
                     'itemid' => new external_value(PARAM_INT, 'Item ID'),
-                    'userreaction' => new external_value(PARAM_ALPHANUMEXT, 'Current user reaction, empty if none'),
+                    'userreactions' => new external_multiple_structure(
+                        new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode')
+                    ),
                     'counts' => new external_multiple_structure(
                         new external_single_structure([
                             'emoji' => new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode'),

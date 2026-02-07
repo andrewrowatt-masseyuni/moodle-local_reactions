@@ -43,5 +43,26 @@ function xmldb_local_reactions_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026020702, 'local', 'reactions');
     }
 
+    if ($oldversion < 2026020703) {
+        // Switch from single-react to multi-react: replace the unique index
+        // so users can have multiple different emoji on the same item.
+        $table = new xmldb_table('local_reactions');
+
+        // Drop old unique index (component, itemtype, itemid, userid).
+        $oldindex = new xmldb_index('user_item_unique', XMLDB_INDEX_UNIQUE, ['component', 'itemtype', 'itemid', 'userid']);
+        if ($dbman->index_exists($table, $oldindex)) {
+            $dbman->drop_index($table, $oldindex);
+        }
+
+        // Add new unique index (component, itemtype, itemid, userid, emoji).
+        $newindex = new xmldb_index('user_item_emoji_unique', XMLDB_INDEX_UNIQUE,
+            ['component', 'itemtype', 'itemid', 'userid', 'emoji']);
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_plugin_savepoint(true, 2026020703, 'local', 'reactions');
+    }
+
     return true;
 }

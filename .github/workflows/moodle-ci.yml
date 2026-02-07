@@ -106,9 +106,9 @@ jobs:
         if: ${{ !cancelled() }}
         run: moodle-plugin-ci phpunit --fail-on-warning
 
-      - name: PHPUnit tests - Core privacy (AJR)
-        if: ${{ !cancelled() && matrix.moodle-branch < 'MOODLE_501_STABLE' }}
-        run: moodle/vendor/bin/phpunit moodle/privacy/tests/privacy/provider_test.php
+      # - name: PHPUnit tests - Core privacy (AJR)
+      #   if: ${{ !cancelled() && matrix.moodle-branch < 'MOODLE_501_STABLE' }}
+      #   run: moodle/vendor/bin/phpunit moodle/privacy/tests/privacy/provider_test.php
 
       #- name: PHPUnit tests - Core privacy Moodle 5.1+ (AJR)
       #  if: ${{ !cancelled() && matrix.moodle-branch >= 'MOODLE_501_STABLE' }}

@@ -55,11 +55,33 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
     );
     $mform->addHelpButton('local_reactions_enabled', 'enablereactions', 'local_reactions');
 
-    // Set current value from the database.
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_compactview_list',
+        get_string('compactview_list', 'local_reactions')
+    );
+    $mform->addHelpButton('local_reactions_compactview_list', 'compactview_list', 'local_reactions');
+    $mform->hideIf('local_reactions_compactview_list', 'local_reactions_enabled');
+
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_compactview_discuss',
+        get_string('compactview_discuss', 'local_reactions')
+    );
+    $mform->addHelpButton('local_reactions_compactview_discuss', 'compactview_discuss', 'local_reactions');
+    $mform->hideIf('local_reactions_compactview_discuss', 'local_reactions_enabled');
+
+    // Set current values from the database.
     if ($cmid = $cm->coursemodule) {
         $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
         if ($record && $record->enabled) {
             $mform->setDefault('local_reactions_enabled', 1);
+        }
+        if ($record && !empty($record->compactview_list)) {
+            $mform->setDefault('local_reactions_compactview_list', 1);
+        }
+        if ($record && !empty($record->compactview_discuss)) {
+            $mform->setDefault('local_reactions_compactview_discuss', 1);
         }
     }
 }
@@ -80,16 +102,22 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     }
 
     $enabled = !empty($data->local_reactions_enabled) ? 1 : 0;
+    $compactviewlist = !empty($data->local_reactions_compactview_list) ? 1 : 0;
+    $compactviewdiscuss = !empty($data->local_reactions_compactview_discuss) ? 1 : 0;
     $cmid = $data->coursemodule;
 
     $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
     if ($existing) {
         $existing->enabled = $enabled;
+        $existing->compactview_list = $compactviewlist;
+        $existing->compactview_discuss = $compactviewdiscuss;
         $DB->update_record('local_reactions_enabled', $existing);
     } else {
         $DB->insert_record('local_reactions_enabled', (object) [
             'cmid' => $cmid,
             'enabled' => $enabled,
+            'compactview_list' => $compactviewlist,
+            'compactview_discuss' => $compactviewdiscuss,
         ]);
     }
 

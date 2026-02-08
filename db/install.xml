@@ -28,6 +28,8 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="Course module ID"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = reactions enabled"/>
+        <FIELD NAME="compactview_list" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on discussion list page"/>
+        <FIELD NAME="compactview_discuss" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on individual discussion page"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

@@ -8,8 +8,6 @@
 .local-reactions-bar-compact {
     padding: 0;
     gap: 3px;
-    transform: scale(0.8);
-    transform-origin: left center;
 }
 
 /* Reaction count pills (shown for emoji with counts) */
@@ -129,4 +127,12 @@
 .local-reactions-picker-btn.local-reactions-selected {
     background: #ddf4ff;
     border-color: #54aeff;
+}
+
+/* Compact pill: single pill showing all reacted emojis + total count */
+.local-reactions-pill-compact .local-reactions-compact-emojis {
+    font-size: 1rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    margin-right: 2px;
 }

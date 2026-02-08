@@ -149,6 +149,9 @@ const buildTemplateContext = (data) => {
     });
 
     const buttons = [];
+    let totalCount = 0;
+    const reactedEmojis = [];
+
     for (const [shortcode, unicode] of Object.entries(config.emojis)) {
         const count = countsMap[shortcode] || 0;
         buttons.push({
@@ -159,10 +162,19 @@ const buildTemplateContext = (data) => {
             selected: false,
             canreact: false,
         });
+        if (count > 0) {
+            totalCount += count;
+            reactedEmojis.push({unicode: unicode});
+        }
     }
 
     return {
         buttons: buttons,
         canreact: false,
+        compactview: config.compactview,
+        hasanycount: totalCount > 0,
+        totalcount: totalCount,
+        reactedEmojis: reactedEmojis,
+        selected: false,
     };
 };

@@ -29,6 +29,7 @@
     Example context (json):
     {
         "canreact": true,
+        "compactview": false,
         "buttons": [
             {"shortcode": "thumbsup", "unicode": "\ud83d\udc4d", "count": 3, "hascount": true, "selected": true, "canreact": true},
             {"shortcode": "heart", "unicode": "\u2764\ufe0f", "count": 0, "hascount": false, "selected": false, "canreact": true}
@@ -66,8 +67,15 @@
         </div>
     {{/canreact}}
 
-    {{! Active reaction pills (only shown when they have counts) }}
-    {{#buttons}}
-        {{> local_reactions/pill }}
-    {{/buttons}}
+    {{! Compact view: single pill with all reacted emojis and total count }}
+    {{#compactview}}
+        {{> local_reactions/compact_pill }}
+    {{/compactview}}
+
+    {{! Normal view: individual reaction pills }}
+    {{^compactview}}
+        {{#buttons}}
+            {{> local_reactions/pill }}
+        {{/buttons}}
+    {{/compactview}}
 </div>

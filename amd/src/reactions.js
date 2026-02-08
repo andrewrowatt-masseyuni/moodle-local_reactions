@@ -174,6 +174,10 @@ const buildTemplateContext = (data) => {
 
     const userReactions = data.userreactions || [];
     const buttons = [];
+    let totalCount = 0;
+    const reactedEmojis = [];
+    let hasAnySelected = false;
+
     for (const [shortcode, unicode] of Object.entries(config.emojis)) {
         const count = countsMap[shortcode] || 0;
         const isSelected = userReactions.includes(shortcode);
@@ -185,11 +189,23 @@ const buildTemplateContext = (data) => {
             selected: isSelected,
             canreact: config.canreact,
         });
+        if (count > 0) {
+            totalCount += count;
+            reactedEmojis.push({unicode: unicode});
+            if (isSelected) {
+                hasAnySelected = true;
+            }
+        }
     }
 
     return {
         buttons: buttons,
         canreact: config.canreact,
+        compactview: config.compactview,
+        hasanycount: totalCount > 0,
+        totalcount: totalCount,
+        reactedEmojis: reactedEmojis,
+        selected: hasAnySelected,
     };
 };
 
@@ -200,9 +216,8 @@ const buildTemplateContext = (data) => {
  * @param {number} postId The forum post ID.
  */
 const bindHandlers = (barElement, postId) => {
-    // Picker trigger button.
-    const trigger = barElement.querySelector('[data-action="open-picker"]');
-    if (trigger) {
+    // Picker trigger buttons (smiley trigger and compact pill both use data-action="open-picker").
+    barElement.querySelectorAll('[data-action="open-picker"]').forEach((trigger) => {
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
             const picker = barElement.querySelector('[data-region="reactions-picker"]');
@@ -222,7 +237,7 @@ const bindHandlers = (barElement, postId) => {
                 trigger.setAttribute('aria-expanded', 'true');
             }
         });
-    }
+    });
 
     // All toggle-reaction buttons (pills + picker buttons).
     if (config.canreact) {

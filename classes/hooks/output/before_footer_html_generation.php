@@ -71,6 +71,7 @@ class before_footer_html_generation {
                     'itemtype' => 'post',
                     'canreact' => $canreact,
                     'emojis' => $emojiset,
+                    'compactview' => !empty($record->compactview_discuss),
                 ],
             ]);
         } else if ($pagetype === 'mod-forum-view') {
@@ -81,6 +82,7 @@ class before_footer_html_generation {
                     'component' => 'mod_forum',
                     'itemtype' => 'post',
                     'emojis' => $emojiset,
+                    'compactview' => !empty($record->compactview_list),
                 ],
             ]);
         }

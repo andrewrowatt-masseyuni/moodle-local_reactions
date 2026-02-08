@@ -14,6 +14,7 @@ This local plugin adds an emoji reaction bar to forum posts, allowing users to r
 -   Admin-configurable emoji set
 -   Anonymous display (counts only), with full user logging in the database
 -   Works with dynamically loaded inline replies via MutationObserver
+-   Includes a course-wide Reactions report
 -   Tested on Moodle 4.5 Boost theme and Snap theme
 
 ## Installing via uploaded ZIP file

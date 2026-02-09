@@ -117,7 +117,7 @@ jobs:
       - name: Behat features
         id: behat
         # Interim solution as MOODLE_501 deprecates ".sr-only". Unsure of replacement that works for all versions.
-        if: ${{ !cancelled() && matrix.moodle-branch < 'MOODLE_501_STABLE' }}
+        if: ${{ !cancelled() && matrix.moodle-branch < 'MOODLE_500_STABLE' }}
         run: moodle-plugin-ci behat --profile chrome --scss-deprecations
 
       - name: Upload Behat Faildump

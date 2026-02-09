@@ -76,6 +76,53 @@ const closeAllPickers = () => {
 };
 
 /**
+ * Create a skeleton placeholder element for a reactions bar.
+ *
+ * @returns {HTMLElement} The skeleton element.
+ */
+const createSkeleton = () => {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'local-reactions-bar local-reactions-skeleton d-flex flex-wrap align-items-center mt-2 mb-1';
+    skeleton.setAttribute('data-region', 'reactions-skeleton');
+    if (config.compactview) {
+        const pill = document.createElement('span');
+        pill.className = 'local-reactions-skeleton-pill local-reactions-skeleton-pill-compact';
+        skeleton.appendChild(pill);
+    } else {
+        for (let i = 0; i < 3; i++) {
+            const pill = document.createElement('span');
+            pill.className = 'local-reactions-skeleton-pill';
+            skeleton.appendChild(pill);
+        }
+    }
+    return skeleton;
+};
+
+/**
+ * Insert skeleton placeholders into articles that don't yet have a reactions bar.
+ *
+ * @param {number[]} postIds The post IDs to insert skeletons for.
+ */
+const insertSkeletons = (postIds) => {
+    for (const postId of postIds) {
+        const article = document.querySelector(`article[data-post-id="${postId}"]`);
+        if (!article || article.querySelector('[data-region="reactions-skeleton"]')) {
+            continue;
+        }
+        const skeleton = createSkeleton();
+        const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
+        if (actionsContainer) {
+            actionsContainer.parentElement.insertBefore(skeleton, actionsContainer);
+        } else {
+            const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+            if (postCore) {
+                postCore.appendChild(skeleton);
+            }
+        }
+    }
+};
+
+/**
  * Find all forum post articles on the page and load their reactions.
  */
 const loadReactions = async() => {
@@ -95,6 +142,8 @@ const loadReactions = async() => {
     if (!postIds.length) {
         return;
     }
+
+    insertSkeletons(postIds);
 
     try {
         const response = await Ajax.call([{
@@ -141,17 +190,21 @@ const renderBar = async(postId, data) => {
         container.innerHTML = html;
         const barElement = container.firstElementChild;
 
-        // Try to insert alongside the post actions (reply posts).
-        const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
-        if (actionsContainer) {
-            actionsContainer.parentElement.insertBefore(barElement, actionsContainer);
+        // Replace skeleton if present, otherwise insert at the usual location.
+        const skeleton = article.querySelector('[data-region="reactions-skeleton"]');
+        if (skeleton) {
+            skeleton.replaceWith(barElement);
         } else {
-            // Fallback for first post: append to the post core column.
-            const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-            if (!postCore) {
-                return;
+            const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
+            if (actionsContainer) {
+                actionsContainer.parentElement.insertBefore(barElement, actionsContainer);
+            } else {
+                const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+                if (!postCore) {
+                    return;
+                }
+                postCore.appendChild(barElement);
             }
-            postCore.appendChild(barElement);
         }
         Templates.runTemplateJS(js);
         bindHandlers(barElement, postId);

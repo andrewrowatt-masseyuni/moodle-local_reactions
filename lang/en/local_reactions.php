@@ -40,6 +40,7 @@ $string['forumheader'] = 'Forum';
 $string['mostreactedposts'] = 'Most-reacted posts this week';
 $string['needsattentionhint'] = 'Might need teacher response to kickstart engagement.';
 $string['noposts'] = 'No posts found in forums with reactions enabled.';
+$string['noreactions'] = 'No reactions';
 $string['noreactedposts'] = 'No posts have received reactions this week.';
 $string['participationhint'] = 'Identifies different participation styles.';
 $string['pluginname'] = 'Reactions';

@@ -26,6 +26,10 @@ defined('MOODLE_INTERNAL') || die();
 
 $callbacks = [
     [
+        'hook' => \core\hook\output\before_standard_head_html_generation::class,
+        'callback' => \local_reactions\hooks\output\before_standard_head_html_generation::class . '::callback',
+    ],
+    [
         'hook' => \core\hook\output\before_footer_html_generation::class,
         'callback' => \local_reactions\hooks\output\before_footer_html_generation::class . '::callback',
     ],

@@ -120,6 +120,8 @@ const loadDiscussionReactions = async() => {
     }
 
     insertSkeletons(rows);
+    // Remove the server-injected CSS space reservation now that JS skeletons are in place.
+    document.getElementById('local-reactions-reserve')?.remove();
 
     try {
         const response = await Ajax.call([{

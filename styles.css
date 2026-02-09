@@ -25,6 +25,7 @@
     transition: background-color 0.15s ease, border-color 0.15s ease;
     -webkit-user-select: none;
     user-select: none;
+    height: 28px; /* Ensures consistent height with skeleton loader */
 }
 
 .local-reactions-pill:hover:not(:disabled) {
@@ -149,12 +150,12 @@
     font-size: 0.75rem;
     line-height: 1.4;
     color: #8b949e;
+    height: 28px; /* Ensures consistent height with skeleton loader */
 }
 
 /* Skeleton loader placeholder */
 .local-reactions-skeleton {
     gap: 4px;
-    padding: 2px 0;
 }
 
 .local-reactions-skeleton-pill {

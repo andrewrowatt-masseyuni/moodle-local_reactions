@@ -38,6 +38,7 @@
         class="local-reactions-pill{{#selected}} local-reactions-selected{{/selected}}"
         data-action="toggle-reaction"
         data-emoji="{{shortcode}}"
+        data-count="{{count}}"
         aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
         aria-label="{{unicode}} {{count}}"
         {{^canreact}}disabled{{/canreact}}

@@ -1,3 +1,4 @@
+[![Moodle Plugin CI](https://github.com/andrewrowatt-masseyuni/moodle-local_reactions/actions/workflows/moodle-ci.yml/badge.svg)](https://github.com/andrewrowatt-masseyuni/moodle-local_reactions/actions/workflows/moodle-ci.yml)
 # Reactions
 
 Modern emoji reactions for Moodle forum posts.

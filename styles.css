@@ -136,3 +136,47 @@
     letter-spacing: -2px;
     margin-right: 2px;
 }
+
+/* Empty state pill for discussions with no reactions */
+.local-reactions-empty {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px dashed #d1d1d1;
+    border-radius: 16px;
+    background: transparent;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #8b949e;
+}
+
+/* Skeleton loader placeholder */
+.local-reactions-skeleton {
+    gap: 4px;
+    padding: 2px 0;
+}
+
+.local-reactions-skeleton-pill {
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    border-radius: 16px;
+    background: linear-gradient(90deg, #e8e8e8 25%, #f0f0f0 50%, #e8e8e8 75%);
+    background-size: 200% 100%;
+    animation: local-reactions-shimmer 1.5s ease-in-out infinite;
+}
+
+.local-reactions-skeleton-pill-compact {
+    width: 80px;
+}
+
+@keyframes local-reactions-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}

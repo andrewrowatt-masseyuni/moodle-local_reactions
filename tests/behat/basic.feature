@@ -185,6 +185,27 @@ Feature: Forum reactions and reporting
     And I should see "Hello from Student One"
     And I should see "Hello from Student Two"
 
+  Scenario: Discussion list shows no-reactions indicator for unreacted discussions
+    Given the following "activities" exist:
+      | activity | name          | course | type    | idnumber |
+      | forum    | General Forum | C1     | general | general1 |
+    And the following "local_reactions > enabled forums" exist:
+      | forum         | course | enabled | compactview_list | compactview_discuss |
+      | General Forum | C1     | 1       | 0                | 0                   |
+    And the following "mod_forum > discussions" exist:
+      | user     | forum         | name            | message               |
+      | student1 | General Forum | Unreacted topic | This has no reactions |
+      | student1 | General Forum | Reacted topic   | This has reactions    |
+    And the following "local_reactions > reactions" exist:
+      | user     | post          | emoji    |
+      | student2 | Reacted topic | thumbsup |
+    When I log in as "student1"
+    And I am on the "General Forum" "forum activity" page
+    And I wait for reactions to load
+    Then ".local-reactions-empty" "css_element" should exist in the "Unreacted topic" "table_row"
+    And ".local-reactions-empty" "css_element" should not exist in the "Reacted topic" "table_row"
+    And "[data-emoji='thumbsup']" "css_element" should exist in the "Reacted topic" "table_row"
+
   Scenario: Student cannot access the reactions report
     # The report navigation link should not exist in page source for students.
     Given I log in as "student1"

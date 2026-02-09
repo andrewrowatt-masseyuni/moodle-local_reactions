@@ -39,6 +39,66 @@ export const init = (cfg) => {
 };
 
 /**
+ * Create a skeleton placeholder element for a discussion list reactions bar.
+ *
+ * @returns {HTMLElement} The skeleton element.
+ */
+const createSkeleton = () => {
+    const skeleton = document.createElement('div');
+    skeleton.className =
+        'local-reactions-bar local-reactions-bar-compact local-reactions-skeleton d-flex flex-wrap align-items-center';
+    skeleton.setAttribute('data-region', 'reactions-skeleton');
+    if (config.compactview) {
+        const pill = document.createElement('span');
+        pill.className = 'local-reactions-skeleton-pill local-reactions-skeleton-pill-compact';
+        skeleton.appendChild(pill);
+    } else {
+        for (let i = 0; i < 2; i++) {
+            const pill = document.createElement('span');
+            pill.className = 'local-reactions-skeleton-pill';
+            skeleton.appendChild(pill);
+        }
+    }
+    return skeleton;
+};
+
+/**
+ * Insert skeleton placeholders into discussion rows.
+ *
+ * @param {HTMLElement[]} rows The discussion list item elements.
+ */
+const insertSkeletons = (rows) => {
+    rows.forEach((row) => {
+        if (row.querySelector('[data-region="reactions-skeleton"]')) {
+            return;
+        }
+        const topicTh = row.querySelector('th.topic');
+        if (!topicTh) {
+            return;
+        }
+        const wrapperDiv = topicTh.querySelector('.p-3');
+        if (!wrapperDiv) {
+            return;
+        }
+        const skeleton = createSkeleton();
+        const childDivs = wrapperDiv.querySelectorAll(':scope > div');
+        const badgesDiv = childDivs[1];
+        if (badgesDiv) {
+            badgesDiv.after(skeleton);
+        } else {
+            wrapperDiv.appendChild(skeleton);
+        }
+    });
+};
+
+/**
+ * Remove all remaining skeleton placeholders from the page.
+ */
+const removeSkeletons = () => {
+    document.querySelectorAll('[data-region="reactions-skeleton"]').forEach((el) => el.remove());
+};
+
+/**
  * Find all discussion rows on the page and load their aggregated reactions.
  */
 const loadDiscussionReactions = async() => {
@@ -58,6 +118,8 @@ const loadDiscussionReactions = async() => {
     if (!discussionIds.length) {
         return;
     }
+
+    insertSkeletons(rows);
 
     try {
         const response = await Ajax.call([{
@@ -82,6 +144,8 @@ const loadDiscussionReactions = async() => {
     } catch (err) {
         Notification.exception(err);
     }
+
+    removeSkeletons();
 };
 
 /**
@@ -91,12 +155,6 @@ const loadDiscussionReactions = async() => {
  * @param {Object} data Reaction data from the web service.
  */
 const renderBar = async(discussionId, data) => {
-    // Only render if there are actual reactions to show.
-    const hasAnyCount = data.counts.some((c) => c.count > 0);
-    if (!hasAnyCount) {
-        return;
-    }
-
     const row = document.querySelector(
         `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
     );
@@ -112,21 +170,26 @@ const renderBar = async(discussionId, data) => {
         container.innerHTML = html;
         const barElement = container.firstElementChild;
 
-        // Insert below the discussion title, after the locked/timed badges div.
-        const topicTh = row.querySelector('th.topic');
-        if (!topicTh) {
-            return;
-        }
-        const wrapperDiv = topicTh.querySelector('.p-3');
-        if (!wrapperDiv) {
-            return;
-        }
-        const childDivs = wrapperDiv.querySelectorAll(':scope > div');
-        const badgesDiv = childDivs[1];
-        if (badgesDiv) {
-            badgesDiv.after(barElement);
+        // Replace skeleton if present, otherwise insert at the usual location.
+        const skeleton = row.querySelector('[data-region="reactions-skeleton"]');
+        if (skeleton) {
+            skeleton.replaceWith(barElement);
         } else {
-            wrapperDiv.appendChild(barElement);
+            const topicTh = row.querySelector('th.topic');
+            if (!topicTh) {
+                return;
+            }
+            const wrapperDiv = topicTh.querySelector('.p-3');
+            if (!wrapperDiv) {
+                return;
+            }
+            const childDivs = wrapperDiv.querySelectorAll(':scope > div');
+            const badgesDiv = childDivs[1];
+            if (badgesDiv) {
+                badgesDiv.after(barElement);
+            } else {
+                wrapperDiv.appendChild(barElement);
+            }
         }
         Templates.runTemplateJS(js);
     } catch (err) {

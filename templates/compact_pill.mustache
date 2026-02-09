@@ -37,6 +37,7 @@
         type="button"
         class="local-reactions-pill local-reactions-pill-compact{{#selected}} local-reactions-selected{{/selected}}"
         data-action="open-picker"
+        data-total-count="{{totalcount}}"
         aria-label="{{totalcount}} {{#str}} totalreactions, local_reactions {{/str}}"
         {{^canreact}}disabled{{/canreact}}
     >

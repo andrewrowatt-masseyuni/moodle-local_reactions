@@ -30,6 +30,9 @@ namespace local_reactions\hooks\output;
 class before_standard_head_html_generation {
     /**
      * Inject space-reserving CSS on the forum discussion list page.
+     * This is only added if the plugin is enabled, reactions are enabled for the current forum.
+     * Users without the view capability will not have the CSS injected, to avoid reserving space unnecessarily.
+     * A complex implementation (include the JavaScript aspects) but offers the best user experince.
      *
      * @param \core\hook\output\before_standard_head_html_generation $hook
      */

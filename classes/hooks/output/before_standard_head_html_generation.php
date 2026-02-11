@@ -17,7 +17,7 @@
 namespace local_reactions\hooks\output;
 
 /**
- * Hook callback to inject space-reserving CSS for the discussion list reactions bar.
+ * Hook callback to inject space-reserving CSS for the reactions bar.
  *
  * Injects an inline style into the page head that uses ::after pseudo-elements
  * to reserve vertical space for the reactions bar before JavaScript loads.
@@ -29,10 +29,9 @@ namespace local_reactions\hooks\output;
  */
 class before_standard_head_html_generation {
     /**
-     * Inject space-reserving CSS on the forum discussion list page.
+     * Inject space-reserving CSS on forum pages.
      * This is only added if the plugin is enabled, reactions are enabled for the current forum.
      * Users without the view capability will not have the CSS injected, to avoid reserving space unnecessarily.
-     * A complex implementation (include the JavaScript aspects) but offers the best user experince.
      *
      * @param \core\hook\output\before_standard_head_html_generation $hook
      */
@@ -43,7 +42,8 @@ class before_standard_head_html_generation {
             return;
         }
 
-        if ($PAGE->pagetype !== 'mod-forum-view') {
+        $pagetype = $PAGE->pagetype;
+        if ($pagetype !== 'mod-forum-view' && $pagetype !== 'mod-forum-discuss') {
             return;
         }
 
@@ -61,24 +61,42 @@ class before_standard_head_html_generation {
             return;
         }
 
-        $width = !empty($record->compactview_list) ? '80px' : '52px';
-
-        $css = '[data-region="discussion-list-item"] th.topic .p-3::after {'
-            . 'content:\'\';'
-            . 'display:block;'
-            . "width:{$width};"
-            . 'height:28px;'
-            . 'margin-top:0px;'
-            . 'border-radius:16px;'
-            . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
-            . 'background-size:200% 100%;'
-            . 'animation:local-reactions-reserve-shimmer 1.5s ease-in-out infinite;'
-            . '}'
-            . '@keyframes local-reactions-reserve-shimmer{'
+        $keyframes = '@keyframes local-reactions-reserve-shimmer{'
             . '0%{background-position:200% 0}'
             . '100%{background-position:-200% 0}'
             . '}';
 
-        $hook->add_html('<style id="local-reactions-reserve">' . $css . '</style>');
+        if ($pagetype === 'mod-forum-view') {
+            $width = !empty($record->compactview_list) ? '80px' : '52px';
+
+            $css = '[data-region="discussion-list-item"] th.topic .p-3::after {'
+                . 'content:\'\';'
+                . 'display:block;'
+                . "width:{$width};"
+                . 'height:28px;'
+                . 'margin-top:0px;'
+                . 'border-radius:16px;'
+                . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
+                . 'background-size:200% 100%;'
+                . 'animation:local-reactions-reserve-shimmer 1.5s ease-in-out infinite;'
+                . '}';
+        } else {
+            $width = !empty($record->compactview_discuss) ? '80px' : '52px';
+
+            // Target the flex-wrap parent of post-actions-container using :has().
+            // The ::before becomes a flex item at the start, matching where the real bar is inserted.
+            $css = 'article[data-post-id] .d-flex.flex-wrap:has(>[data-region="post-actions-container"])::before{'
+                . 'content:\'\';'
+                . "width:{$width};"
+                . 'height:26px;'
+                . 'margin:calc(0.5rem + 2px) 0 4px 0;'
+                . 'border-radius:16px;'
+                . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
+                . 'background-size:200% 100%;'
+                . 'animation:local-reactions-reserve-shimmer 1.5s ease-in-out infinite;'
+                . '}';
+        }
+
+        $hook->add_html('<style id="local-reactions-reserve">' . $css . $keyframes . '</style>');
     }
 }

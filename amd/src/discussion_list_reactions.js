@@ -28,13 +28,13 @@ import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
 import * as Cache from 'local_reactions/cache';
-import {computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds} from 'local_reactions/utils';
+import {
+    computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds,
+    applyDiffAnimations, clearAnimationClasses, updateCacheBatch,
+} from 'local_reactions/utils';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
-
-/** @var {number} Duration in ms to keep animation classes before removal. */
-const ANIMATION_TIMEOUT = 2100;
 
 /** @var {Object} Tracks last-rendered reaction data per discussion ID for diff computation during polling. */
 let currentDataMap = {};
@@ -218,8 +218,6 @@ const loadDiscussionReactions = async() => {
         });
 
         // Phase 4: Update UI and cache.
-        const cacheEntries = [];
-
         for (const discussionId of discussionIds) {
             const freshData = reactionsMap[discussionId] || {discussionid: discussionId, counts: []};
 
@@ -233,10 +231,8 @@ const loadDiscussionReactions = async() => {
                     const row = document.querySelector(
                         `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
                     );
-                    const bar = row?.querySelector('[data-region="reactions-bar"]');
-                    if (bar) {
-                        bar.setAttribute('data-source', 'live');
-                    }
+                    row?.querySelector('[data-region="reactions-bar"]')
+                        ?.setAttribute('data-source', 'live');
                 }
             } else {
                 // This discussion was not cached - render normally (replaces skeleton).
@@ -244,18 +240,13 @@ const loadDiscussionReactions = async() => {
             }
 
             currentDataMap[discussionId] = freshData;
-
-            if (cacheAvailable) {
-                cacheEntries.push({
-                    key: Cache.discussionKey(config.component, config.itemtype, discussionId),
-                    data: {counts: freshData.counts || []},
-                });
-            }
         }
 
-        if (cacheEntries.length > 0) {
-            await Cache.setMultiple(cacheEntries);
-        }
+        await updateCacheBatch(
+            discussionIds,
+            (id) => Cache.discussionKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch (err) {
         Notification.exception(err);
     }
@@ -328,34 +319,12 @@ const rerenderBarWithAnimation = async(discussionId, freshData, diffs) => {
         const {element: newBar, js} = await renderToElement('local_reactions/discussion_list_reactions', context);
         newBar.setAttribute('data-source', 'live');
 
-        // Apply animation classes to changed pills.
-        if (!config.compactview) {
-            newBar.querySelectorAll('[data-emoji]').forEach((pill) => {
-                const emoji = pill.getAttribute('data-emoji');
-                if (diffs.changedEmojis.has(emoji)) {
-                    pill.classList.add('local-reactions-count-changed');
-                }
-                if (diffs.newEmojis.has(emoji)) {
-                    pill.classList.add('local-reactions-pill-new');
-                }
-            });
-        } else {
-            const compactPill = newBar.querySelector('.local-reactions-pill-compact');
-            if (compactPill) {
-                compactPill.classList.add('local-reactions-count-changed');
-            }
-        }
+        applyDiffAnimations(newBar, diffs, config.compactview);
 
         existingBar.replaceWith(newBar);
         Templates.runTemplateJS(js);
 
-        // Remove animation classes after animation completes.
-        setTimeout(() => {
-            newBar.querySelectorAll('.local-reactions-count-changed, .local-reactions-pill-new')
-                .forEach((el) => {
-                    el.classList.remove('local-reactions-count-changed', 'local-reactions-pill-new');
-                });
-        }, ANIMATION_TIMEOUT);
+        clearAnimationClasses(newBar);
     } catch (err) {
         Notification.exception(err);
     }
@@ -386,9 +355,6 @@ const pollDiscussionReactions = async() => {
             reactionsMap[item.discussionid] = item;
         });
 
-        const cacheAvailable = await Cache.isAvailable();
-        const cacheEntries = [];
-
         for (const discussionId of discussionIds) {
             const freshData = reactionsMap[discussionId] || {discussionid: discussionId, counts: []};
             const previousData = currentDataMap[discussionId];
@@ -401,18 +367,13 @@ const pollDiscussionReactions = async() => {
             }
 
             currentDataMap[discussionId] = freshData;
-
-            if (cacheAvailable) {
-                cacheEntries.push({
-                    key: Cache.discussionKey(config.component, config.itemtype, discussionId),
-                    data: {counts: freshData.counts || []},
-                });
-            }
         }
 
-        if (cacheEntries.length > 0) {
-            await Cache.setMultiple(cacheEntries);
-        }
+        await updateCacheBatch(
+            discussionIds,
+            (id) => Cache.discussionKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch {
         // Silently ignore poll errors to avoid disrupting the user.
     }

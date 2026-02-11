@@ -125,54 +125,6 @@ export const discussionKey = (component, itemtype, discussionid) => {
 };
 
 /**
- * Get a cached entry by key. Returns null if not found or expired.
- *
- * @param {string} key The cache key.
- * @returns {Promise<Object|null>} The cached data object, or null.
- */
-export const get = async(key) => {
-    const database = await getDb();
-    if (!database) {
-        return null;
-    }
-
-    try {
-        return await new Promise((resolve) => {
-            const tx = database.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const request = store.get(key);
-
-            request.onsuccess = () => {
-                const record = request.result;
-                if (!record) {
-                    resolve(null);
-                    return;
-                }
-                // Check TTL.
-                if (Date.now() - record.timestamp > CACHE_TTL) {
-                    // Stale entry - delete it asynchronously and return null.
-                    try {
-                        const deleteTx = database.transaction(STORE_NAME, 'readwrite');
-                        deleteTx.objectStore(STORE_NAME).delete(key);
-                    } catch (e) {
-                        // Ignore deletion errors.
-                    }
-                    resolve(null);
-                    return;
-                }
-                resolve(record.data);
-            };
-
-            request.onerror = () => {
-                resolve(null);
-            };
-        });
-    } catch (e) {
-        return null;
-    }
-};
-
-/**
  * Get multiple cached entries by keys.
  *
  * @param {string[]} keys Array of cache keys.
@@ -226,32 +178,6 @@ export const getMultiple = async(keys) => {
             }
         });
         return results;
-    }
-};
-
-/**
- * Set a cache entry.
- *
- * @param {string} key The cache key.
- * @param {Object} data The reaction data to cache (counts only).
- * @returns {Promise<void>}
- */
-export const set = async(key, data) => {
-    const database = await getDb();
-    if (!database) {
-        return;
-    }
-
-    try {
-        const tx = database.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put({
-            cacheKey: key,
-            data: data,
-            timestamp: Date.now(),
-        });
-    } catch (e) {
-        // Silently fail.
     }
 };
 

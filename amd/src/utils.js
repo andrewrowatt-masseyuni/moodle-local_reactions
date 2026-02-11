@@ -22,6 +22,10 @@
  */
 
 import Templates from 'core/templates';
+import * as Cache from 'local_reactions/cache';
+
+/** @var {number} Duration in ms to keep animation classes before removal. */
+export const ANIMATION_TIMEOUT = 2100;
 
 /**
  * Render a Mustache template and return the first element.
@@ -175,4 +179,78 @@ export const collectIds = (selector, attribute) => {
         }
     });
     return ids;
+};
+
+/**
+ * Apply animation classes to pills in a newly rendered bar based on diffs.
+ *
+ * @param {HTMLElement} newBar The new reactions bar element.
+ * @param {Object} diffs The diff result from computeDiffs.
+ * @param {boolean} compactview Whether compact view is enabled.
+ */
+export const applyDiffAnimations = (newBar, diffs, compactview) => {
+    if (!diffs.hasChanges) {
+        return;
+    }
+
+    if (!compactview) {
+        newBar.querySelectorAll('[data-emoji]').forEach((pill) => {
+            const emoji = pill.getAttribute('data-emoji');
+            if (diffs.changedEmojis.has(emoji)) {
+                pill.classList.add('local-reactions-count-changed');
+            }
+            if (diffs.newEmojis.has(emoji)) {
+                pill.classList.add('local-reactions-pill-new');
+            }
+        });
+    } else {
+        const compactPill = newBar.querySelector('.local-reactions-pill-compact');
+        if (compactPill) {
+            compactPill.classList.add('local-reactions-count-changed');
+        }
+    }
+};
+
+/**
+ * Remove animation classes from a bar after the animation duration.
+ *
+ * @param {HTMLElement} bar The reactions bar element.
+ */
+export const clearAnimationClasses = (bar) => {
+    setTimeout(() => {
+        bar.querySelectorAll('.local-reactions-count-changed, .local-reactions-pill-new')
+            .forEach((el) => {
+                el.classList.remove('local-reactions-count-changed', 'local-reactions-pill-new');
+            });
+    }, ANIMATION_TIMEOUT);
+};
+
+/**
+ * Update the IndexedDB cache for a batch of items.
+ *
+ * @param {number[]} ids The item/discussion IDs.
+ * @param {Function} keyFn Function that takes an ID and returns a cache key.
+ * @param {Object} dataMap Map of ID to reaction data (must have a counts property).
+ * @returns {Promise<void>}
+ */
+export const updateCacheBatch = async(ids, keyFn, dataMap) => {
+    const cacheAvailable = await Cache.isAvailable();
+    if (!cacheAvailable) {
+        return;
+    }
+
+    const entries = [];
+    for (const id of ids) {
+        const data = dataMap[id];
+        if (data) {
+            entries.push({
+                key: keyFn(id),
+                data: {counts: data.counts || []},
+            });
+        }
+    }
+
+    if (entries.length > 0) {
+        await Cache.setMultiple(entries);
+    }
 };

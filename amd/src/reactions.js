@@ -28,13 +28,13 @@ import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
 import * as Cache from 'local_reactions/cache';
-import {computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds} from 'local_reactions/utils';
+import {
+    computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds,
+    applyDiffAnimations, clearAnimationClasses, updateCacheBatch,
+} from 'local_reactions/utils';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
-
-/** @var {number} Duration in ms to keep animation classes before removal. */
-const ANIMATION_TIMEOUT = 2100;
 
 /** @var {Object} Tracks last-rendered reaction data per post ID for diff computation during polling. */
 let currentDataMap = {};
@@ -218,8 +218,6 @@ const loadReactions = async() => {
         });
 
         // Phase 4: Update UI and cache.
-        const cacheEntries = [];
-
         for (const postId of postIds) {
             const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
 
@@ -233,18 +231,13 @@ const loadReactions = async() => {
             }
 
             currentDataMap[postId] = freshData;
-
-            if (cacheAvailable) {
-                cacheEntries.push({
-                    key: Cache.itemKey(config.component, config.itemtype, postId),
-                    data: {counts: freshData.counts || []},
-                });
-            }
         }
 
-        if (cacheEntries.length > 0) {
-            await Cache.setMultiple(cacheEntries);
-        }
+        await updateCacheBatch(
+            postIds,
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch (err) {
         Notification.exception(err);
     }
@@ -327,38 +320,14 @@ const rerenderBarWithAnimation = async(postId, freshData, diffs) => {
         const {element: newBar, js} = await renderToElement('local_reactions/reactions_bar', context);
         newBar.setAttribute('data-source', 'live');
 
-        // Apply animation classes to changed pills before inserting into DOM.
-        if (diffs.hasChanges) {
-            if (!config.compactview) {
-                newBar.querySelectorAll('[data-emoji]').forEach((pill) => {
-                    const emoji = pill.getAttribute('data-emoji');
-                    if (diffs.changedEmojis.has(emoji)) {
-                        pill.classList.add('local-reactions-count-changed');
-                    }
-                    if (diffs.newEmojis.has(emoji)) {
-                        pill.classList.add('local-reactions-pill-new');
-                    }
-                });
-            } else {
-                const compactPill = newBar.querySelector('.local-reactions-pill-compact');
-                if (compactPill) {
-                    compactPill.classList.add('local-reactions-count-changed');
-                }
-            }
-        }
+        applyDiffAnimations(newBar, diffs, config.compactview);
 
         existingBar.replaceWith(newBar);
         Templates.runTemplateJS(js);
         bindHandlers(newBar, postId);
 
-        // Remove animation classes after animation completes.
         if (diffs.hasChanges) {
-            setTimeout(() => {
-                newBar.querySelectorAll('.local-reactions-count-changed, .local-reactions-pill-new')
-                    .forEach((el) => {
-                        el.classList.remove('local-reactions-count-changed', 'local-reactions-pill-new');
-                    });
-            }, ANIMATION_TIMEOUT);
+            clearAnimationClasses(newBar);
         }
     } catch (err) {
         Notification.exception(err);
@@ -452,14 +421,11 @@ const toggleReaction = async(postId, emoji, barElement) => {
 
         currentDataMap[postId] = freshData;
 
-        // Update the cache with counts only.
-        const cacheAvailable = await Cache.isAvailable();
-        if (cacheAvailable) {
-            await Cache.set(
-                Cache.itemKey(config.component, config.itemtype, postId),
-                {counts: response.counts}
-            );
-        }
+        await updateCacheBatch(
+            [postId],
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch (err) {
         Notification.exception(err);
         // Re-enable buttons on error.
@@ -498,9 +464,6 @@ const pollReactions = async() => {
             reactionsMap[item.itemid] = item;
         });
 
-        const cacheAvailable = await Cache.isAvailable();
-        const cacheEntries = [];
-
         for (const postId of postIds) {
             const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
             const previousData = currentDataMap[postId];
@@ -513,18 +476,13 @@ const pollReactions = async() => {
             }
 
             currentDataMap[postId] = freshData;
-
-            if (cacheAvailable) {
-                cacheEntries.push({
-                    key: Cache.itemKey(config.component, config.itemtype, postId),
-                    data: {counts: freshData.counts || []},
-                });
-            }
         }
 
-        if (cacheEntries.length > 0) {
-            await Cache.setMultiple(cacheEntries);
-        }
+        await updateCacheBatch(
+            postIds,
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch {
         // Silently ignore poll errors to avoid disrupting the user.
     }

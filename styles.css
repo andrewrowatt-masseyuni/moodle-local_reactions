@@ -189,7 +189,7 @@
 
 /* Animation: new pill appearing - fade in with slight scale */
 .local-reactions-pill-new {
-    animation: local-reactions-fade-in 2s ease-out;
+    animation: local-reactions-pulse 2s ease-in-out;
 }
 
 @keyframes local-reactions-pulse {

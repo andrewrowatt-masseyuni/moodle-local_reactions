@@ -59,6 +59,7 @@ class before_footer_html_generation {
         }
 
         $emojiset = \local_reactions\manager::get_emoji_set();
+        $pollinterval = (int) get_config('local_reactions', 'pollinterval');
 
         if ($pagetype === 'mod-forum-discuss') {
             // Individual discussion page: full interactive reactions.
@@ -72,6 +73,7 @@ class before_footer_html_generation {
                     'canreact' => $canreact,
                     'emojis' => $emojiset,
                     'compactview' => !empty($record->compactview_discuss),
+                    'pollinterval' => $pollinterval,
                 ],
             ]);
         } else if ($pagetype === 'mod-forum-view') {
@@ -83,6 +85,7 @@ class before_footer_html_generation {
                     'itemtype' => 'post',
                     'emojis' => $emojiset,
                     'compactview' => !empty($record->compactview_list),
+                    'pollinterval' => $pollinterval,
                 ],
             ]);
         }

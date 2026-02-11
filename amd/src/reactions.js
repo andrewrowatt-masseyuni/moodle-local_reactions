@@ -16,6 +16,9 @@
 /**
  * AMD module for emoji reactions on forum posts (GitHub-style picker).
  *
+ * Renders cached reactions instantly from IndexedDB, then refreshes from the
+ * web service and animates any differences.
+ *
  * @module     local_reactions/reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -24,9 +27,23 @@
 import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
+import * as Cache from 'local_reactions/cache';
+import {
+    computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds,
+    applyDiffAnimations, clearAnimationClasses, updateCacheBatch,
+} from 'local_reactions/utils';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
+
+/** @var {Object} Tracks last-rendered reaction data per post ID for diff computation during polling. */
+let currentDataMap = {};
+
+/** @var {boolean} Whether a toggle request is in-flight (prevents poll from racing with toggle). */
+let toggleInProgress = false;
+
+/** @var {boolean} Whether polling has been initialised. */
+let pollingInitialised = false;
 
 /**
  * Initialise the reactions module.
@@ -76,6 +93,24 @@ const closeAllPickers = () => {
 };
 
 /**
+ * Insert an element before the post actions container, or append to post core.
+ *
+ * @param {HTMLElement} article The article element.
+ * @param {HTMLElement} element The element to insert.
+ */
+const insertBeforeActions = (article, element) => {
+    const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
+    if (actionsContainer) {
+        actionsContainer.parentElement.insertBefore(element, actionsContainer);
+    } else {
+        const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+        if (postCore) {
+            postCore.appendChild(element);
+        }
+    }
+};
+
+/**
  * Create a skeleton placeholder element for a reactions bar.
  *
  * @returns {HTMLElement} The skeleton element.
@@ -109,21 +144,15 @@ const insertSkeletons = (postIds) => {
         if (!article || article.querySelector('[data-region="reactions-skeleton"]')) {
             continue;
         }
-        const skeleton = createSkeleton();
-        const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
-        if (actionsContainer) {
-            actionsContainer.parentElement.insertBefore(skeleton, actionsContainer);
-        } else {
-            const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-            if (postCore) {
-                postCore.appendChild(skeleton);
-            }
-        }
+        insertBeforeActions(article, createSkeleton());
     }
 };
 
 /**
  * Find all forum post articles on the page and load their reactions.
+ *
+ * Uses a cache-first strategy: renders cached counts instantly (read-only),
+ * then fetches fresh data from the web service and animates any differences.
  */
 const loadReactions = async() => {
     const articles = document.querySelectorAll('article[data-post-id]');
@@ -143,8 +172,35 @@ const loadReactions = async() => {
         return;
     }
 
-    insertSkeletons(postIds);
+    // Phase 1: Try to render from cache (read-only, no interaction).
+    const cachedPostIds = new Set();
+    const cachedDataMap = {};
+    const cacheAvailable = await Cache.isAvailable();
 
+    if (cacheAvailable) {
+        const cacheKeys = postIds.map((id) => Cache.itemKey(config.component, config.itemtype, id));
+        const cached = await Cache.getMultiple(cacheKeys);
+
+        const renderPromises = [];
+        for (const postId of postIds) {
+            const key = Cache.itemKey(config.component, config.itemtype, postId);
+            const cachedData = cached.get(key);
+            if (cachedData) {
+                cachedDataMap[postId] = cachedData;
+                cachedPostIds.add(postId);
+                renderPromises.push(renderBar(postId, cachedData, true));
+            }
+        }
+        await Promise.all(renderPromises);
+    }
+
+    // Phase 2: Insert skeletons only for uncached posts.
+    const uncachedPostIds = postIds.filter((id) => !cachedPostIds.has(id));
+    if (uncachedPostIds.length > 0) {
+        insertSkeletons(uncachedPostIds);
+    }
+
+    // Phase 3: Fetch fresh data from web service (for ALL posts).
     try {
         const response = await Ajax.call([{
             methodname: 'local_reactions_get_reactions',
@@ -161,12 +217,34 @@ const loadReactions = async() => {
             reactionsMap[item.itemid] = item;
         });
 
+        // Phase 4: Update UI and cache.
         for (const postId of postIds) {
-            const data = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
-            await renderBar(postId, data);
+            const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
+
+            if (cachedPostIds.has(postId)) {
+                // This post was rendered from cache - compute diffs and re-render with animation.
+                const diffs = computeDiffs(cachedDataMap[postId], freshData);
+                await rerenderBarWithAnimation(postId, freshData, diffs);
+            } else {
+                // This post was not cached - render normally (replaces skeleton).
+                await renderBar(postId, freshData, false);
+            }
+
+            currentDataMap[postId] = freshData;
         }
+
+        await updateCacheBatch(
+            postIds,
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch (err) {
         Notification.exception(err);
+    }
+
+    if (!pollingInitialised) {
+        pollingInitialised = true;
+        createPoller(config.pollinterval, pollReactions);
     }
 };
 
@@ -174,92 +252,86 @@ const loadReactions = async() => {
  * Build the template context and render the reactions bar into a post.
  *
  * @param {number} postId The forum post ID.
- * @param {Object} data Reaction data from the web service.
+ * @param {Object} data Reaction data.
+ * @param {boolean} fromCache Whether this render is from cached data (read-only).
  */
-const renderBar = async(postId, data) => {
+const renderBar = async(postId, data, fromCache) => {
     const article = document.querySelector(`article[data-post-id="${postId}"]`);
     if (!article || article.querySelector('[data-region="reactions-bar"]')) {
         return;
     }
 
-    const context = buildTemplateContext(data);
+    const context = buildTemplateContext(data, config.emojis, {
+        canreact: config.canreact,
+        compactview: config.compactview,
+        userreactions: fromCache ? [] : (data.userreactions || []),
+    });
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const barElement = container.firstElementChild;
+        const {element: barElement, js} = await renderToElement('local_reactions/reactions_bar', context);
+        barElement.setAttribute('data-source', fromCache ? 'cache' : 'live');
 
         // Replace skeleton if present, otherwise insert at the usual location.
         const skeleton = article.querySelector('[data-region="reactions-skeleton"]');
         if (skeleton) {
             skeleton.replaceWith(barElement);
         } else {
-            const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
-            if (actionsContainer) {
-                actionsContainer.parentElement.insertBefore(barElement, actionsContainer);
-            } else {
-                const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-                if (!postCore) {
-                    return;
-                }
-                postCore.appendChild(barElement);
-            }
+            insertBeforeActions(article, barElement);
         }
         Templates.runTemplateJS(js);
-        bindHandlers(barElement, postId);
+        if (fromCache) {
+            // Disable all buttons so the picker and pills are visible but non-interactive.
+            barElement.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', 'disabled'));
+        } else {
+            bindHandlers(barElement, postId);
+        }
     } catch (err) {
         Notification.exception(err);
     }
 };
 
 /**
- * Build Mustache template context from reaction data.
+ * Re-render a reactions bar with animation for changed counts.
  *
- * @param {Object} data Reaction data.
- * @returns {Object} Template context.
+ * Always re-renders to enable interaction (cache renders are read-only).
+ *
+ * @param {number} postId The forum post ID.
+ * @param {Object} freshData Fresh reaction data from the web service.
+ * @param {Object} diffs The diff result from computeDiffs.
  */
-const buildTemplateContext = (data) => {
-    const countsMap = {};
-    data.counts.forEach((c) => {
-        countsMap[c.emoji] = c.count;
-    });
-
-    const userReactions = data.userreactions || [];
-    const buttons = [];
-    let totalCount = 0;
-    const reactedEmojis = [];
-    let hasAnySelected = false;
-
-    for (const [shortcode, unicode] of Object.entries(config.emojis)) {
-        const count = countsMap[shortcode] || 0;
-        const isSelected = userReactions.includes(shortcode);
-        buttons.push({
-            shortcode: shortcode,
-            unicode: unicode,
-            count: count,
-            hascount: count > 0,
-            selected: isSelected,
-            canreact: config.canreact,
-        });
-        if (count > 0) {
-            totalCount += count;
-            reactedEmojis.push({unicode: unicode});
-            if (isSelected) {
-                hasAnySelected = true;
-            }
-        }
+const rerenderBarWithAnimation = async(postId, freshData, diffs) => {
+    const article = document.querySelector(`article[data-post-id="${postId}"]`);
+    if (!article) {
+        return;
     }
 
-    return {
-        buttons: buttons,
+    const existingBar = article.querySelector('[data-region="reactions-bar"]');
+    if (!existingBar) {
+        return;
+    }
+
+    const context = buildTemplateContext(freshData, config.emojis, {
         canreact: config.canreact,
         compactview: config.compactview,
-        hasanycount: totalCount > 0,
-        totalcount: totalCount,
-        reactedEmojis: reactedEmojis,
-        selected: hasAnySelected,
-    };
+        userreactions: freshData.userreactions || [],
+    });
+
+    try {
+        const {element: newBar, js} = await renderToElement('local_reactions/reactions_bar', context);
+        newBar.setAttribute('data-source', 'live');
+
+        applyDiffAnimations(newBar, diffs, config.compactview);
+
+        existingBar.replaceWith(newBar);
+        Templates.runTemplateJS(js);
+        bindHandlers(newBar, postId);
+
+        if (diffs.hasChanges) {
+            clearAnimationClasses(newBar);
+        }
+    } catch (err) {
+        Notification.exception(err);
+    }
 };
 
 /**
@@ -316,6 +388,7 @@ const bindHandlers = (barElement, postId) => {
 const toggleReaction = async(postId, emoji, barElement) => {
     // Disable all interactive elements during the request.
     barElement.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', 'disabled'));
+    toggleInProgress = true;
 
     try {
         const response = await Ajax.call([{
@@ -328,22 +401,89 @@ const toggleReaction = async(postId, emoji, barElement) => {
             },
         }])[0];
 
-        // Rebuild the bar with fresh data to correctly show/hide pills.
-        const context = buildTemplateContext({
+        const freshData = {
             userreactions: response.userreactions,
             counts: response.counts,
+        };
+
+        // Rebuild the bar with fresh data to correctly show/hide pills.
+        const context = buildTemplateContext(freshData, config.emojis, {
+            canreact: config.canreact,
+            compactview: config.compactview,
+            userreactions: freshData.userreactions || [],
         });
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const newBar = container.firstElementChild;
+        const {element: newBar, js} = await renderToElement('local_reactions/reactions_bar', context);
+        newBar.setAttribute('data-source', 'live');
 
         barElement.replaceWith(newBar);
         Templates.runTemplateJS(js);
         bindHandlers(newBar, postId);
+
+        currentDataMap[postId] = freshData;
+
+        await updateCacheBatch(
+            [postId],
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
     } catch (err) {
         Notification.exception(err);
         // Re-enable buttons on error.
         barElement.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
+    } finally {
+        toggleInProgress = false;
+    }
+};
+
+/**
+ * Poll the server for updated reaction data and animate any changes.
+ */
+const pollReactions = async() => {
+    if (toggleInProgress) {
+        return;
+    }
+
+    const postIds = collectIds('article[data-post-id]', 'data-post-id');
+    if (!postIds.length) {
+        return;
+    }
+
+    try {
+        const response = await Ajax.call([{
+            methodname: 'local_reactions_get_reactions',
+            args: {
+                component: config.component,
+                itemtype: config.itemtype,
+                itemids: postIds,
+                contextid: config.contextid,
+            },
+        }])[0];
+
+        const reactionsMap = {};
+        response.items.forEach((item) => {
+            reactionsMap[item.itemid] = item;
+        });
+
+        for (const postId of postIds) {
+            const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
+            const previousData = currentDataMap[postId];
+
+            if (previousData) {
+                const diffs = computeDiffs(previousData, freshData);
+                if (diffs.hasChanges) {
+                    await rerenderBarWithAnimation(postId, freshData, diffs);
+                }
+            }
+
+            currentDataMap[postId] = freshData;
+        }
+
+        await updateCacheBatch(
+            postIds,
+            (id) => Cache.itemKey(config.component, config.itemtype, id),
+            currentDataMap,
+        );
+    } catch {
+        // Silently ignore poll errors to avoid disrupting the user.
     }
 };

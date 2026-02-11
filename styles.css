@@ -181,3 +181,40 @@
         background-position: -200% 0;
     }
 }
+
+/* Animation: count changed - brief pulse on the pill */
+.local-reactions-count-changed {
+    animation: local-reactions-pulse 2s ease-in-out;
+}
+
+/* Animation: new pill appearing - fade in with slight scale */
+.local-reactions-pill-new {
+    animation: local-reactions-pulse 2s ease-in-out;
+}
+
+@keyframes local-reactions-pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    40% {
+        transform: scale(1.5);
+        background-color: #fff3cd;
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes local-reactions-fade-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

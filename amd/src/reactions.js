@@ -194,7 +194,8 @@ const loadReactions = async() => {
         await Promise.all(renderPromises);
     }
 
-    // Phase 2: Insert skeletons only for uncached posts.
+    // Phase 2: Remove CSS reserve skeleton and insert JS skeletons for uncached posts.
+    document.getElementById('local-reactions-reserve')?.remove();
     const uncachedPostIds = postIds.filter((id) => !cachedPostIds.has(id));
     if (uncachedPostIds.length > 0) {
         insertSkeletons(uncachedPostIds);

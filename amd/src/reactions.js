@@ -28,6 +28,7 @@ import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
 import * as Cache from 'local_reactions/cache';
+import {computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds} from 'local_reactions/utils';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
@@ -41,8 +42,8 @@ let currentDataMap = {};
 /** @var {boolean} Whether a toggle request is in-flight (prevents poll from racing with toggle). */
 let toggleInProgress = false;
 
-/** @var {number|null} setInterval ID for polling, or null if not polling. */
-let pollTimer = null;
+/** @var {boolean} Whether polling has been initialised. */
+let pollingInitialised = false;
 
 /**
  * Initialise the reactions module.
@@ -92,6 +93,24 @@ const closeAllPickers = () => {
 };
 
 /**
+ * Insert an element before the post actions container, or append to post core.
+ *
+ * @param {HTMLElement} article The article element.
+ * @param {HTMLElement} element The element to insert.
+ */
+const insertBeforeActions = (article, element) => {
+    const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
+    if (actionsContainer) {
+        actionsContainer.parentElement.insertBefore(element, actionsContainer);
+    } else {
+        const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+        if (postCore) {
+            postCore.appendChild(element);
+        }
+    }
+};
+
+/**
  * Create a skeleton placeholder element for a reactions bar.
  *
  * @returns {HTMLElement} The skeleton element.
@@ -125,16 +144,7 @@ const insertSkeletons = (postIds) => {
         if (!article || article.querySelector('[data-region="reactions-skeleton"]')) {
             continue;
         }
-        const skeleton = createSkeleton();
-        const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
-        if (actionsContainer) {
-            actionsContainer.parentElement.insertBefore(skeleton, actionsContainer);
-        } else {
-            const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-            if (postCore) {
-                postCore.appendChild(skeleton);
-            }
-        }
+        insertBeforeActions(article, createSkeleton());
     }
 };
 
@@ -171,15 +181,17 @@ const loadReactions = async() => {
         const cacheKeys = postIds.map((id) => Cache.itemKey(config.component, config.itemtype, id));
         const cached = await Cache.getMultiple(cacheKeys);
 
+        const renderPromises = [];
         for (const postId of postIds) {
             const key = Cache.itemKey(config.component, config.itemtype, postId);
             const cachedData = cached.get(key);
             if (cachedData) {
                 cachedDataMap[postId] = cachedData;
-                await renderBar(postId, cachedData, true);
                 cachedPostIds.add(postId);
+                renderPromises.push(renderBar(postId, cachedData, true));
             }
         }
+        await Promise.all(renderPromises);
     }
 
     // Phase 2: Insert skeletons only for uncached posts.
@@ -237,7 +249,10 @@ const loadReactions = async() => {
         Notification.exception(err);
     }
 
-    startPolling();
+    if (!pollingInitialised) {
+        pollingInitialised = true;
+        createPoller(config.pollinterval, pollReactions);
+    }
 };
 
 /**
@@ -253,13 +268,14 @@ const renderBar = async(postId, data, fromCache) => {
         return;
     }
 
-    const context = buildTemplateContext(data, fromCache);
+    const context = buildTemplateContext(data, config.emojis, {
+        canreact: config.canreact,
+        compactview: config.compactview,
+        userreactions: fromCache ? [] : (data.userreactions || []),
+    });
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const barElement = container.firstElementChild;
+        const {element: barElement, js} = await renderToElement('local_reactions/reactions_bar', context);
         barElement.setAttribute('data-source', fromCache ? 'cache' : 'live');
 
         // Replace skeleton if present, otherwise insert at the usual location.
@@ -267,16 +283,7 @@ const renderBar = async(postId, data, fromCache) => {
         if (skeleton) {
             skeleton.replaceWith(barElement);
         } else {
-            const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
-            if (actionsContainer) {
-                actionsContainer.parentElement.insertBefore(barElement, actionsContainer);
-            } else {
-                const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-                if (!postCore) {
-                    return;
-                }
-                postCore.appendChild(barElement);
-            }
+            insertBeforeActions(article, barElement);
         }
         Templates.runTemplateJS(js);
         if (fromCache) {
@@ -288,49 +295,6 @@ const renderBar = async(postId, data, fromCache) => {
     } catch (err) {
         Notification.exception(err);
     }
-};
-
-/**
- * Compare cached and fresh reaction data to find differences.
- *
- * @param {Object} cachedData Cached reaction data (counts only).
- * @param {Object} freshData Fresh reaction data from web service.
- * @returns {Object} Diffs object.
- */
-const computeDiffs = (cachedData, freshData) => {
-    const cachedCounts = {};
-    (cachedData?.counts || []).forEach((c) => {
-        cachedCounts[c.emoji] = c.count;
-    });
-
-    const freshCounts = {};
-    (freshData?.counts || []).forEach((c) => {
-        freshCounts[c.emoji] = c.count;
-    });
-
-    const changedEmojis = new Set();
-    const newEmojis = new Set();
-    const removedEmojis = new Set();
-
-    for (const emoji of Object.keys(freshCounts)) {
-        if (!(emoji in cachedCounts)) {
-            if (freshCounts[emoji] > 0) {
-                newEmojis.add(emoji);
-            }
-        } else if (freshCounts[emoji] !== cachedCounts[emoji]) {
-            changedEmojis.add(emoji);
-        }
-    }
-
-    for (const emoji of Object.keys(cachedCounts)) {
-        if (cachedCounts[emoji] > 0 && (!(emoji in freshCounts) || freshCounts[emoji] === 0)) {
-            removedEmojis.add(emoji);
-        }
-    }
-
-    const hasChanges = changedEmojis.size > 0 || newEmojis.size > 0 || removedEmojis.size > 0;
-
-    return {hasChanges, changedEmojis, newEmojis, removedEmojis};
 };
 
 /**
@@ -353,13 +317,14 @@ const rerenderBarWithAnimation = async(postId, freshData, diffs) => {
         return;
     }
 
-    const context = buildTemplateContext(freshData, false);
+    const context = buildTemplateContext(freshData, config.emojis, {
+        canreact: config.canreact,
+        compactview: config.compactview,
+        userreactions: freshData.userreactions || [],
+    });
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const newBar = container.firstElementChild;
+        const {element: newBar, js} = await renderToElement('local_reactions/reactions_bar', context);
         newBar.setAttribute('data-source', 'live');
 
         // Apply animation classes to changed pills before inserting into DOM.
@@ -398,56 +363,6 @@ const rerenderBarWithAnimation = async(postId, freshData, diffs) => {
     } catch (err) {
         Notification.exception(err);
     }
-};
-
-/**
- * Build Mustache template context from reaction data.
- *
- * @param {Object} data Reaction data.
- * @param {boolean} fromCache Whether rendering from cache (forces selected=false for all pills).
- * @returns {Object} Template context.
- */
-const buildTemplateContext = (data, fromCache) => {
-    const countsMap = {};
-    data.counts.forEach((c) => {
-        countsMap[c.emoji] = c.count;
-    });
-
-    const userReactions = fromCache ? [] : (data.userreactions || []);
-    const buttons = [];
-    let totalCount = 0;
-    const reactedEmojis = [];
-    let hasAnySelected = false;
-
-    for (const [shortcode, unicode] of Object.entries(config.emojis)) {
-        const count = countsMap[shortcode] || 0;
-        const isSelected = userReactions.includes(shortcode);
-        buttons.push({
-            shortcode: shortcode,
-            unicode: unicode,
-            count: count,
-            hascount: count > 0,
-            selected: isSelected,
-            canreact: config.canreact,
-        });
-        if (count > 0) {
-            totalCount += count;
-            reactedEmojis.push({unicode: unicode});
-            if (isSelected) {
-                hasAnySelected = true;
-            }
-        }
-    }
-
-    return {
-        buttons: buttons,
-        canreact: config.canreact,
-        compactview: config.compactview,
-        hasanycount: totalCount > 0,
-        totalcount: totalCount,
-        reactedEmojis: reactedEmojis,
-        selected: hasAnySelected,
-    };
 };
 
 /**
@@ -523,11 +438,12 @@ const toggleReaction = async(postId, emoji, barElement) => {
         };
 
         // Rebuild the bar with fresh data to correctly show/hide pills.
-        const context = buildTemplateContext(freshData, false);
-        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const newBar = container.firstElementChild;
+        const context = buildTemplateContext(freshData, config.emojis, {
+            canreact: config.canreact,
+            compactview: config.compactview,
+            userreactions: freshData.userreactions || [],
+        });
+        const {element: newBar, js} = await renderToElement('local_reactions/reactions_bar', context);
         newBar.setAttribute('data-source', 'live');
 
         barElement.replaceWith(newBar);
@@ -554,31 +470,6 @@ const toggleReaction = async(postId, emoji, barElement) => {
 };
 
 /**
- * Start periodic polling for reaction updates from other users.
- *
- * Respects Page Visibility API: pauses when tab is hidden, resumes on focus.
- */
-const startPolling = () => {
-    if (!config.pollinterval || config.pollinterval <= 0 || pollTimer) {
-        return;
-    }
-
-    pollTimer = setInterval(pollReactions, config.pollinterval * 1000);
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        } else if (!pollTimer) {
-            pollReactions();
-            pollTimer = setInterval(pollReactions, config.pollinterval * 1000);
-        }
-    });
-};
-
-/**
  * Poll the server for updated reaction data and animate any changes.
  */
 const pollReactions = async() => {
@@ -586,19 +477,7 @@ const pollReactions = async() => {
         return;
     }
 
-    const articles = document.querySelectorAll('article[data-post-id]');
-    if (!articles.length) {
-        return;
-    }
-
-    const postIds = [];
-    articles.forEach((article) => {
-        const postId = parseInt(article.getAttribute('data-post-id'));
-        if (postId) {
-            postIds.push(postId);
-        }
-    });
-
+    const postIds = collectIds('article[data-post-id]', 'data-post-id');
     if (!postIds.length) {
         return;
     }

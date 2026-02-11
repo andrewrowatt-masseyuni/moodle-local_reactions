@@ -28,6 +28,7 @@ import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
 import * as Cache from 'local_reactions/cache';
+import {computeDiffs, renderToElement, buildTemplateContext, createPoller, collectIds} from 'local_reactions/utils';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
@@ -38,9 +39,6 @@ const ANIMATION_TIMEOUT = 2100;
 /** @var {Object} Tracks last-rendered reaction data per discussion ID for diff computation during polling. */
 let currentDataMap = {};
 
-/** @var {number|null} setInterval ID for polling, or null if not polling. */
-let pollTimer = null;
-
 /**
  * Initialise the discussion list reactions module.
  *
@@ -49,6 +47,32 @@ let pollTimer = null;
 export const init = (cfg) => {
     config = cfg;
     loadDiscussionReactions();
+};
+
+/**
+ * Insert an element after the badges div inside a discussion row, or append to the wrapper.
+ *
+ * @param {HTMLElement} row The discussion list item element.
+ * @param {HTMLElement} element The element to insert.
+ * @returns {boolean} Whether insertion succeeded.
+ */
+const insertAfterBadges = (row, element) => {
+    const topicTh = row.querySelector('th.topic');
+    if (!topicTh) {
+        return false;
+    }
+    const wrapperDiv = topicTh.querySelector('.p-3');
+    if (!wrapperDiv) {
+        return false;
+    }
+    const childDivs = wrapperDiv.querySelectorAll(':scope > div');
+    const badgesDiv = childDivs[1];
+    if (badgesDiv) {
+        badgesDiv.after(element);
+    } else {
+        wrapperDiv.appendChild(element);
+    }
+    return true;
 };
 
 /**
@@ -85,22 +109,7 @@ const insertSkeletons = (rows) => {
         if (row.querySelector('[data-region="reactions-skeleton"]')) {
             return;
         }
-        const topicTh = row.querySelector('th.topic');
-        if (!topicTh) {
-            return;
-        }
-        const wrapperDiv = topicTh.querySelector('.p-3');
-        if (!wrapperDiv) {
-            return;
-        }
-        const skeleton = createSkeleton();
-        const childDivs = wrapperDiv.querySelectorAll(':scope > div');
-        const badgesDiv = childDivs[1];
-        if (badgesDiv) {
-            badgesDiv.after(skeleton);
-        } else {
-            wrapperDiv.appendChild(skeleton);
-        }
+        insertAfterBadges(row, createSkeleton());
     });
 };
 
@@ -152,13 +161,12 @@ const loadDiscussionReactions = async() => {
                 cachedDataMap[discussionId] = cachedData;
                 cachedDiscussionIds.add(discussionId);
                 try {
-                    const context = buildTemplateContext(cachedData);
-                    const {html, js} = await Templates.renderForPromise(
+                    const context = buildTemplateContext(cachedData, config.emojis, {
+                        compactview: config.compactview,
+                    });
+                    const {element: barElement, js} = await renderToElement(
                         'local_reactions/discussion_list_reactions', context
                     );
-                    const container = document.createElement('div');
-                    container.innerHTML = html;
-                    const barElement = container.firstElementChild;
                     barElement.setAttribute('data-source', 'cache');
                     preRenderedBars.push({discussionId, barElement, js});
                 } catch (err) {
@@ -180,21 +188,7 @@ const loadDiscussionReactions = async() => {
         if (!row || row.querySelector('[data-region="reactions-bar"]')) {
             continue;
         }
-        const topicTh = row.querySelector('th.topic');
-        if (!topicTh) {
-            continue;
-        }
-        const wrapperDiv = topicTh.querySelector('.p-3');
-        if (!wrapperDiv) {
-            continue;
-        }
-        const childDivs = wrapperDiv.querySelectorAll(':scope > div');
-        const badgesDiv = childDivs[1];
-        if (badgesDiv) {
-            badgesDiv.after(barElement);
-        } else {
-            wrapperDiv.appendChild(barElement);
-        }
+        insertAfterBadges(row, barElement);
         Templates.runTemplateJS(js);
     }
 
@@ -267,7 +261,7 @@ const loadDiscussionReactions = async() => {
     }
 
     removeSkeletons();
-    startPolling();
+    createPoller(config.pollinterval, pollDiscussionReactions);
 };
 
 /**
@@ -285,13 +279,12 @@ const renderBar = async(discussionId, data, fromCache) => {
         return;
     }
 
-    const context = buildTemplateContext(data);
+    const context = buildTemplateContext(data, config.emojis, {
+        compactview: config.compactview,
+    });
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/discussion_list_reactions', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const barElement = container.firstElementChild;
+        const {element: barElement, js} = await renderToElement('local_reactions/discussion_list_reactions', context);
         barElement.setAttribute('data-source', fromCache ? 'cache' : 'live');
 
         // Replace skeleton if present, otherwise insert at the usual location.
@@ -299,69 +292,12 @@ const renderBar = async(discussionId, data, fromCache) => {
         if (skeleton) {
             skeleton.replaceWith(barElement);
         } else {
-            const topicTh = row.querySelector('th.topic');
-            if (!topicTh) {
-                return;
-            }
-            const wrapperDiv = topicTh.querySelector('.p-3');
-            if (!wrapperDiv) {
-                return;
-            }
-            const childDivs = wrapperDiv.querySelectorAll(':scope > div');
-            const badgesDiv = childDivs[1];
-            if (badgesDiv) {
-                badgesDiv.after(barElement);
-            } else {
-                wrapperDiv.appendChild(barElement);
-            }
+            insertAfterBadges(row, barElement);
         }
         Templates.runTemplateJS(js);
     } catch (err) {
         Notification.exception(err);
     }
-};
-
-/**
- * Compare cached and fresh reaction data to find differences.
- *
- * @param {Object} cachedData Cached reaction data (counts only).
- * @param {Object} freshData Fresh reaction data from web service.
- * @returns {Object} Diffs object.
- */
-const computeDiffs = (cachedData, freshData) => {
-    const cachedCounts = {};
-    (cachedData?.counts || []).forEach((c) => {
-        cachedCounts[c.emoji] = c.count;
-    });
-
-    const freshCounts = {};
-    (freshData?.counts || []).forEach((c) => {
-        freshCounts[c.emoji] = c.count;
-    });
-
-    const changedEmojis = new Set();
-    const newEmojis = new Set();
-    const removedEmojis = new Set();
-
-    for (const emoji of Object.keys(freshCounts)) {
-        if (!(emoji in cachedCounts)) {
-            if (freshCounts[emoji] > 0) {
-                newEmojis.add(emoji);
-            }
-        } else if (freshCounts[emoji] !== cachedCounts[emoji]) {
-            changedEmojis.add(emoji);
-        }
-    }
-
-    for (const emoji of Object.keys(cachedCounts)) {
-        if (cachedCounts[emoji] > 0 && (!(emoji in freshCounts) || freshCounts[emoji] === 0)) {
-            removedEmojis.add(emoji);
-        }
-    }
-
-    const hasChanges = changedEmojis.size > 0 || newEmojis.size > 0 || removedEmojis.size > 0;
-
-    return {hasChanges, changedEmojis, newEmojis, removedEmojis};
 };
 
 /**
@@ -384,13 +320,12 @@ const rerenderBarWithAnimation = async(discussionId, freshData, diffs) => {
         return;
     }
 
-    const context = buildTemplateContext(freshData);
+    const context = buildTemplateContext(freshData, config.emojis, {
+        compactview: config.compactview,
+    });
 
     try {
-        const {html, js} = await Templates.renderForPromise('local_reactions/discussion_list_reactions', context);
-        const container = document.createElement('div');
-        container.innerHTML = html;
-        const newBar = container.firstElementChild;
+        const {element: newBar, js} = await renderToElement('local_reactions/discussion_list_reactions', context);
         newBar.setAttribute('data-source', 'live');
 
         // Apply animation classes to changed pills.
@@ -427,92 +362,10 @@ const rerenderBarWithAnimation = async(discussionId, freshData, diffs) => {
 };
 
 /**
- * Build Mustache template context from aggregated reaction data.
- *
- * All pills are read-only: canreact is false, selected is false for all.
- *
- * @param {Object} data Reaction data.
- * @returns {Object} Template context.
- */
-const buildTemplateContext = (data) => {
-    const countsMap = {};
-    data.counts.forEach((c) => {
-        countsMap[c.emoji] = c.count;
-    });
-
-    const buttons = [];
-    let totalCount = 0;
-    const reactedEmojis = [];
-
-    for (const [shortcode, unicode] of Object.entries(config.emojis)) {
-        const count = countsMap[shortcode] || 0;
-        buttons.push({
-            shortcode: shortcode,
-            unicode: unicode,
-            count: count,
-            hascount: count > 0,
-            selected: false,
-            canreact: false,
-        });
-        if (count > 0) {
-            totalCount += count;
-            reactedEmojis.push({unicode: unicode});
-        }
-    }
-
-    return {
-        buttons: buttons,
-        canreact: false,
-        compactview: config.compactview,
-        hasanycount: totalCount > 0,
-        totalcount: totalCount,
-        reactedEmojis: reactedEmojis,
-        selected: false,
-    };
-};
-
-/**
- * Start periodic polling for reaction updates from other users.
- *
- * Respects Page Visibility API: pauses when tab is hidden, resumes on focus.
- */
-const startPolling = () => {
-    if (!config.pollinterval || config.pollinterval <= 0 || pollTimer) {
-        return;
-    }
-
-    pollTimer = setInterval(pollDiscussionReactions, config.pollinterval * 1000);
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        } else if (!pollTimer) {
-            pollDiscussionReactions();
-            pollTimer = setInterval(pollDiscussionReactions, config.pollinterval * 1000);
-        }
-    });
-};
-
-/**
  * Poll the server for updated discussion reaction data and animate any changes.
  */
 const pollDiscussionReactions = async() => {
-    const rows = document.querySelectorAll('[data-region="discussion-list-item"]');
-    if (!rows.length) {
-        return;
-    }
-
-    const discussionIds = [];
-    rows.forEach((row) => {
-        const discussionId = parseInt(row.getAttribute('data-discussionid'));
-        if (discussionId) {
-            discussionIds.push(discussionId);
-        }
-    });
-
+    const discussionIds = collectIds('[data-region="discussion-list-item"]', 'data-discussionid');
     if (!discussionIds.length) {
         return;
     }

@@ -41,5 +41,13 @@ if ($hassiteconfig) {
         \local_reactions\manager::DEFAULT_EMOJIS
     ));
 
+    $settings->add(new admin_setting_configtext(
+        'local_reactions/pollinterval',
+        get_string('settings:pollinterval', 'local_reactions'),
+        get_string('settings:pollinterval_desc', 'local_reactions'),
+        15,
+        PARAM_INT
+    ));
+
     $ADMIN->add('localplugins', $settings);
 }

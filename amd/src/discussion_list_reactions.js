@@ -35,6 +35,12 @@ let config = {};
 /** @var {number} Duration in ms to keep animation classes before removal. */
 const ANIMATION_TIMEOUT = 2100;
 
+/** @var {Object} Tracks last-rendered reaction data per discussion ID for diff computation during polling. */
+let currentDataMap = {};
+
+/** @var {number|null} setInterval ID for polling, or null if not polling. */
+let pollTimer = null;
+
 /**
  * Initialise the discussion list reactions module.
  *
@@ -243,6 +249,8 @@ const loadDiscussionReactions = async() => {
                 await renderBar(discussionId, freshData, false);
             }
 
+            currentDataMap[discussionId] = freshData;
+
             if (cacheAvailable) {
                 cacheEntries.push({
                     key: Cache.discussionKey(config.component, config.itemtype, discussionId),
@@ -259,6 +267,7 @@ const loadDiscussionReactions = async() => {
     }
 
     removeSkeletons();
+    startPolling();
 };
 
 /**
@@ -460,4 +469,98 @@ const buildTemplateContext = (data) => {
         reactedEmojis: reactedEmojis,
         selected: false,
     };
+};
+
+/**
+ * Start periodic polling for reaction updates from other users.
+ *
+ * Respects Page Visibility API: pauses when tab is hidden, resumes on focus.
+ */
+const startPolling = () => {
+    if (!config.pollinterval || config.pollinterval <= 0 || pollTimer) {
+        return;
+    }
+
+    pollTimer = setInterval(pollDiscussionReactions, config.pollinterval * 1000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        } else if (!pollTimer) {
+            pollDiscussionReactions();
+            pollTimer = setInterval(pollDiscussionReactions, config.pollinterval * 1000);
+        }
+    });
+};
+
+/**
+ * Poll the server for updated discussion reaction data and animate any changes.
+ */
+const pollDiscussionReactions = async() => {
+    const rows = document.querySelectorAll('[data-region="discussion-list-item"]');
+    if (!rows.length) {
+        return;
+    }
+
+    const discussionIds = [];
+    rows.forEach((row) => {
+        const discussionId = parseInt(row.getAttribute('data-discussionid'));
+        if (discussionId) {
+            discussionIds.push(discussionId);
+        }
+    });
+
+    if (!discussionIds.length) {
+        return;
+    }
+
+    try {
+        const response = await Ajax.call([{
+            methodname: 'local_reactions_get_discussion_reactions',
+            args: {
+                component: config.component,
+                itemtype: config.itemtype,
+                discussionids: discussionIds,
+                contextid: config.contextid,
+            },
+        }])[0];
+
+        const reactionsMap = {};
+        response.items.forEach((item) => {
+            reactionsMap[item.discussionid] = item;
+        });
+
+        const cacheAvailable = await Cache.isAvailable();
+        const cacheEntries = [];
+
+        for (const discussionId of discussionIds) {
+            const freshData = reactionsMap[discussionId] || {discussionid: discussionId, counts: []};
+            const previousData = currentDataMap[discussionId];
+
+            if (previousData) {
+                const diffs = computeDiffs(previousData, freshData);
+                if (diffs.hasChanges) {
+                    await rerenderBarWithAnimation(discussionId, freshData, diffs);
+                }
+            }
+
+            currentDataMap[discussionId] = freshData;
+
+            if (cacheAvailable) {
+                cacheEntries.push({
+                    key: Cache.discussionKey(config.component, config.itemtype, discussionId),
+                    data: {counts: freshData.counts || []},
+                });
+            }
+        }
+
+        if (cacheEntries.length > 0) {
+            await Cache.setMultiple(cacheEntries);
+        }
+    } catch {
+        // Silently ignore poll errors to avoid disrupting the user.
+    }
 };

@@ -125,4 +125,24 @@ class behat_local_reactions extends behat_base {
             return;
         }
     }
+
+    /**
+     * Wait for live (non-cached) reactions to finish loading.
+     *
+     * @Given I wait for live reactions to load
+     */
+    public function i_wait_for_live_reactions_to_load(): void {
+        $this->ensure_element_exists('[data-region="reactions-bar"][data-source="live"]', 'css_element');
+    }
+
+    /**
+     * Check that a reactions bar has a specific data-source attribute value.
+     *
+     * @Then the reactions bar should be from :source
+     * @param string $source The expected data-source value (cache or live).
+     */
+    public function the_reactions_bar_should_be_from(string $source): void {
+        $selector = "[data-region=\"reactions-bar\"][data-source=\"{$source}\"]";
+        $this->ensure_element_exists($selector, 'css_element');
+    }
 }

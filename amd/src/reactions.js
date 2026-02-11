@@ -16,6 +16,9 @@
 /**
  * AMD module for emoji reactions on forum posts (GitHub-style picker).
  *
+ * Renders cached reactions instantly from IndexedDB, then refreshes from the
+ * web service and animates any differences.
+ *
  * @module     local_reactions/reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -24,9 +27,13 @@
 import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
+import * as Cache from 'local_reactions/cache';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
+
+/** @var {number} Duration in ms to keep animation classes before removal. */
+const ANIMATION_TIMEOUT = 2100;
 
 /**
  * Initialise the reactions module.
@@ -124,6 +131,9 @@ const insertSkeletons = (postIds) => {
 
 /**
  * Find all forum post articles on the page and load their reactions.
+ *
+ * Uses a cache-first strategy: renders cached counts instantly (read-only),
+ * then fetches fresh data from the web service and animates any differences.
  */
 const loadReactions = async() => {
     const articles = document.querySelectorAll('article[data-post-id]');
@@ -143,8 +153,33 @@ const loadReactions = async() => {
         return;
     }
 
-    insertSkeletons(postIds);
+    // Phase 1: Try to render from cache (read-only, no interaction).
+    const cachedPostIds = new Set();
+    const cachedDataMap = {};
+    const cacheAvailable = await Cache.isAvailable();
 
+    if (cacheAvailable) {
+        const cacheKeys = postIds.map((id) => Cache.itemKey(config.component, config.itemtype, id));
+        const cached = await Cache.getMultiple(cacheKeys);
+
+        for (const postId of postIds) {
+            const key = Cache.itemKey(config.component, config.itemtype, postId);
+            const cachedData = cached.get(key);
+            if (cachedData) {
+                cachedDataMap[postId] = cachedData;
+                await renderBar(postId, cachedData, true);
+                cachedPostIds.add(postId);
+            }
+        }
+    }
+
+    // Phase 2: Insert skeletons only for uncached posts.
+    const uncachedPostIds = postIds.filter((id) => !cachedPostIds.has(id));
+    if (uncachedPostIds.length > 0) {
+        insertSkeletons(uncachedPostIds);
+    }
+
+    // Phase 3: Fetch fresh data from web service (for ALL posts).
     try {
         const response = await Ajax.call([{
             methodname: 'local_reactions_get_reactions',
@@ -161,9 +196,31 @@ const loadReactions = async() => {
             reactionsMap[item.itemid] = item;
         });
 
+        // Phase 4: Update UI and cache.
+        const cacheEntries = [];
+
         for (const postId of postIds) {
-            const data = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
-            await renderBar(postId, data);
+            const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
+
+            if (cachedPostIds.has(postId)) {
+                // This post was rendered from cache - compute diffs and re-render with animation.
+                const diffs = computeDiffs(cachedDataMap[postId], freshData);
+                await rerenderBarWithAnimation(postId, freshData, diffs);
+            } else {
+                // This post was not cached - render normally (replaces skeleton).
+                await renderBar(postId, freshData, false);
+            }
+
+            if (cacheAvailable) {
+                cacheEntries.push({
+                    key: Cache.itemKey(config.component, config.itemtype, postId),
+                    data: {counts: freshData.counts || []},
+                });
+            }
+        }
+
+        if (cacheEntries.length > 0) {
+            await Cache.setMultiple(cacheEntries);
         }
     } catch (err) {
         Notification.exception(err);
@@ -174,21 +231,23 @@ const loadReactions = async() => {
  * Build the template context and render the reactions bar into a post.
  *
  * @param {number} postId The forum post ID.
- * @param {Object} data Reaction data from the web service.
+ * @param {Object} data Reaction data.
+ * @param {boolean} fromCache Whether this render is from cached data (read-only).
  */
-const renderBar = async(postId, data) => {
+const renderBar = async(postId, data, fromCache) => {
     const article = document.querySelector(`article[data-post-id="${postId}"]`);
     if (!article || article.querySelector('[data-region="reactions-bar"]')) {
         return;
     }
 
-    const context = buildTemplateContext(data);
+    const context = buildTemplateContext(data, fromCache);
 
     try {
         const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
         const container = document.createElement('div');
         container.innerHTML = html;
         const barElement = container.firstElementChild;
+        barElement.setAttribute('data-source', fromCache ? 'cache' : 'live');
 
         // Replace skeleton if present, otherwise insert at the usual location.
         const skeleton = article.querySelector('[data-region="reactions-skeleton"]');
@@ -207,7 +266,122 @@ const renderBar = async(postId, data) => {
             }
         }
         Templates.runTemplateJS(js);
-        bindHandlers(barElement, postId);
+        if (fromCache) {
+            // Disable all buttons so the picker and pills are visible but non-interactive.
+            barElement.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', 'disabled'));
+        } else {
+            bindHandlers(barElement, postId);
+        }
+    } catch (err) {
+        Notification.exception(err);
+    }
+};
+
+/**
+ * Compare cached and fresh reaction data to find differences.
+ *
+ * @param {Object} cachedData Cached reaction data (counts only).
+ * @param {Object} freshData Fresh reaction data from web service.
+ * @returns {Object} Diffs object.
+ */
+const computeDiffs = (cachedData, freshData) => {
+    const cachedCounts = {};
+    (cachedData?.counts || []).forEach((c) => {
+        cachedCounts[c.emoji] = c.count;
+    });
+
+    const freshCounts = {};
+    (freshData?.counts || []).forEach((c) => {
+        freshCounts[c.emoji] = c.count;
+    });
+
+    const changedEmojis = new Set();
+    const newEmojis = new Set();
+    const removedEmojis = new Set();
+
+    for (const emoji of Object.keys(freshCounts)) {
+        if (!(emoji in cachedCounts)) {
+            if (freshCounts[emoji] > 0) {
+                newEmojis.add(emoji);
+            }
+        } else if (freshCounts[emoji] !== cachedCounts[emoji]) {
+            changedEmojis.add(emoji);
+        }
+    }
+
+    for (const emoji of Object.keys(cachedCounts)) {
+        if (cachedCounts[emoji] > 0 && (!(emoji in freshCounts) || freshCounts[emoji] === 0)) {
+            removedEmojis.add(emoji);
+        }
+    }
+
+    const hasChanges = changedEmojis.size > 0 || newEmojis.size > 0 || removedEmojis.size > 0;
+
+    return {hasChanges, changedEmojis, newEmojis, removedEmojis};
+};
+
+/**
+ * Re-render a reactions bar with animation for changed counts.
+ *
+ * Always re-renders to enable interaction (cache renders are read-only).
+ *
+ * @param {number} postId The forum post ID.
+ * @param {Object} freshData Fresh reaction data from the web service.
+ * @param {Object} diffs The diff result from computeDiffs.
+ */
+const rerenderBarWithAnimation = async(postId, freshData, diffs) => {
+    const article = document.querySelector(`article[data-post-id="${postId}"]`);
+    if (!article) {
+        return;
+    }
+
+    const existingBar = article.querySelector('[data-region="reactions-bar"]');
+    if (!existingBar) {
+        return;
+    }
+
+    const context = buildTemplateContext(freshData, false);
+
+    try {
+        const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        const newBar = container.firstElementChild;
+        newBar.setAttribute('data-source', 'live');
+
+        // Apply animation classes to changed pills before inserting into DOM.
+        if (diffs.hasChanges) {
+            if (!config.compactview) {
+                newBar.querySelectorAll('[data-emoji]').forEach((pill) => {
+                    const emoji = pill.getAttribute('data-emoji');
+                    if (diffs.changedEmojis.has(emoji)) {
+                        pill.classList.add('local-reactions-count-changed');
+                    }
+                    if (diffs.newEmojis.has(emoji)) {
+                        pill.classList.add('local-reactions-pill-new');
+                    }
+                });
+            } else {
+                const compactPill = newBar.querySelector('.local-reactions-pill-compact');
+                if (compactPill) {
+                    compactPill.classList.add('local-reactions-count-changed');
+                }
+            }
+        }
+
+        existingBar.replaceWith(newBar);
+        Templates.runTemplateJS(js);
+        bindHandlers(newBar, postId);
+
+        // Remove animation classes after animation completes.
+        if (diffs.hasChanges) {
+            setTimeout(() => {
+                newBar.querySelectorAll('.local-reactions-count-changed, .local-reactions-pill-new')
+                    .forEach((el) => {
+                        el.classList.remove('local-reactions-count-changed', 'local-reactions-pill-new');
+                    });
+            }, ANIMATION_TIMEOUT);
+        }
     } catch (err) {
         Notification.exception(err);
     }
@@ -217,15 +391,16 @@ const renderBar = async(postId, data) => {
  * Build Mustache template context from reaction data.
  *
  * @param {Object} data Reaction data.
+ * @param {boolean} fromCache Whether rendering from cache (forces selected=false for all pills).
  * @returns {Object} Template context.
  */
-const buildTemplateContext = (data) => {
+const buildTemplateContext = (data, fromCache) => {
     const countsMap = {};
     data.counts.forEach((c) => {
         countsMap[c.emoji] = c.count;
     });
 
-    const userReactions = data.userreactions || [];
+    const userReactions = fromCache ? [] : (data.userreactions || []);
     const buttons = [];
     let totalCount = 0;
     const reactedEmojis = [];
@@ -328,19 +503,31 @@ const toggleReaction = async(postId, emoji, barElement) => {
             },
         }])[0];
 
-        // Rebuild the bar with fresh data to correctly show/hide pills.
-        const context = buildTemplateContext({
+        const freshData = {
             userreactions: response.userreactions,
             counts: response.counts,
-        });
+        };
+
+        // Rebuild the bar with fresh data to correctly show/hide pills.
+        const context = buildTemplateContext(freshData, false);
         const {html, js} = await Templates.renderForPromise('local_reactions/reactions_bar', context);
         const container = document.createElement('div');
         container.innerHTML = html;
         const newBar = container.firstElementChild;
+        newBar.setAttribute('data-source', 'live');
 
         barElement.replaceWith(newBar);
         Templates.runTemplateJS(js);
         bindHandlers(newBar, postId);
+
+        // Update the cache with counts only.
+        const cacheAvailable = await Cache.isAvailable();
+        if (cacheAvailable) {
+            await Cache.set(
+                Cache.itemKey(config.component, config.itemtype, postId),
+                {counts: response.counts}
+            );
+        }
     } catch (err) {
         Notification.exception(err);
         // Re-enable buttons on error.

@@ -16,6 +16,9 @@
 /**
  * AMD module for read-only aggregated reactions on the forum discussion list.
  *
+ * Renders cached reactions instantly from IndexedDB, then refreshes from the
+ * web service and animates any differences.
+ *
  * @module     local_reactions/discussion_list_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -24,9 +27,13 @@
 import Ajax from 'core/ajax';
 import Templates from 'core/templates';
 import Notification from 'core/notification';
+import * as Cache from 'local_reactions/cache';
 
 /** @var {Object} Module-level config set during init. */
 let config = {};
+
+/** @var {number} Duration in ms to keep animation classes before removal. */
+const ANIMATION_TIMEOUT = 2100;
 
 /**
  * Initialise the discussion list reactions module.
@@ -100,6 +107,9 @@ const removeSkeletons = () => {
 
 /**
  * Find all discussion rows on the page and load their aggregated reactions.
+ *
+ * Uses a cache-first strategy: renders cached counts instantly, then fetches
+ * fresh data from the web service and animates any differences.
  */
 const loadDiscussionReactions = async() => {
     const rows = document.querySelectorAll('[data-region="discussion-list-item"]');
@@ -119,10 +129,78 @@ const loadDiscussionReactions = async() => {
         return;
     }
 
-    insertSkeletons(rows);
-    // Remove the server-injected CSS space reservation now that JS skeletons are in place.
+    // Phase 1: Pre-render cached bars off-DOM (all async work before any DOM mutations).
+    const cachedDiscussionIds = new Set();
+    const cachedDataMap = {};
+    const cacheAvailable = await Cache.isAvailable();
+    const preRenderedBars = [];
+
+    if (cacheAvailable) {
+        const cacheKeys = discussionIds.map((id) => Cache.discussionKey(config.component, config.itemtype, id));
+        const cached = await Cache.getMultiple(cacheKeys);
+
+        for (const discussionId of discussionIds) {
+            const key = Cache.discussionKey(config.component, config.itemtype, discussionId);
+            const cachedData = cached.get(key);
+            if (cachedData) {
+                cachedDataMap[discussionId] = cachedData;
+                cachedDiscussionIds.add(discussionId);
+                try {
+                    const context = buildTemplateContext(cachedData);
+                    const {html, js} = await Templates.renderForPromise(
+                        'local_reactions/discussion_list_reactions', context
+                    );
+                    const container = document.createElement('div');
+                    container.innerHTML = html;
+                    const barElement = container.firstElementChild;
+                    barElement.setAttribute('data-source', 'cache');
+                    preRenderedBars.push({discussionId, barElement, js});
+                } catch (err) {
+                    cachedDiscussionIds.delete(discussionId);
+                    delete cachedDataMap[discussionId];
+                }
+            }
+        }
+    }
+
+    // Phase 2: Synchronous DOM batch - remove reservation, insert cached bars and skeletons
+    // in one go so the browser repaints only once (no gap, no double-height).
     document.getElementById('local-reactions-reserve')?.remove();
 
+    for (const {discussionId, barElement, js} of preRenderedBars) {
+        const row = document.querySelector(
+            `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
+        );
+        if (!row || row.querySelector('[data-region="reactions-bar"]')) {
+            continue;
+        }
+        const topicTh = row.querySelector('th.topic');
+        if (!topicTh) {
+            continue;
+        }
+        const wrapperDiv = topicTh.querySelector('.p-3');
+        if (!wrapperDiv) {
+            continue;
+        }
+        const childDivs = wrapperDiv.querySelectorAll(':scope > div');
+        const badgesDiv = childDivs[1];
+        if (badgesDiv) {
+            badgesDiv.after(barElement);
+        } else {
+            wrapperDiv.appendChild(barElement);
+        }
+        Templates.runTemplateJS(js);
+    }
+
+    const uncachedRows = [...rows].filter((row) => {
+        const id = parseInt(row.getAttribute('data-discussionid'));
+        return !cachedDiscussionIds.has(id);
+    });
+    if (uncachedRows.length > 0) {
+        insertSkeletons(uncachedRows);
+    }
+
+    // Phase 3: Fetch fresh data from web service (for ALL discussions).
     try {
         const response = await Ajax.call([{
             methodname: 'local_reactions_get_discussion_reactions',
@@ -139,9 +217,42 @@ const loadDiscussionReactions = async() => {
             reactionsMap[item.discussionid] = item;
         });
 
+        // Phase 4: Update UI and cache.
+        const cacheEntries = [];
+
         for (const discussionId of discussionIds) {
-            const data = reactionsMap[discussionId] || {discussionid: discussionId, counts: []};
-            await renderBar(discussionId, data);
+            const freshData = reactionsMap[discussionId] || {discussionid: discussionId, counts: []};
+
+            if (cachedDiscussionIds.has(discussionId)) {
+                // This discussion was rendered from cache - compute diffs and re-render with animation.
+                const diffs = computeDiffs(cachedDataMap[discussionId], freshData);
+                if (diffs.hasChanges) {
+                    await rerenderBarWithAnimation(discussionId, freshData, diffs);
+                } else {
+                    // No count changes - just update data-source to live.
+                    const row = document.querySelector(
+                        `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
+                    );
+                    const bar = row?.querySelector('[data-region="reactions-bar"]');
+                    if (bar) {
+                        bar.setAttribute('data-source', 'live');
+                    }
+                }
+            } else {
+                // This discussion was not cached - render normally (replaces skeleton).
+                await renderBar(discussionId, freshData, false);
+            }
+
+            if (cacheAvailable) {
+                cacheEntries.push({
+                    key: Cache.discussionKey(config.component, config.itemtype, discussionId),
+                    data: {counts: freshData.counts || []},
+                });
+            }
+        }
+
+        if (cacheEntries.length > 0) {
+            await Cache.setMultiple(cacheEntries);
         }
     } catch (err) {
         Notification.exception(err);
@@ -155,8 +266,9 @@ const loadDiscussionReactions = async() => {
  *
  * @param {number} discussionId The forum discussion ID.
  * @param {Object} data Reaction data from the web service.
+ * @param {boolean} fromCache Whether this render is from cached data.
  */
-const renderBar = async(discussionId, data) => {
+const renderBar = async(discussionId, data, fromCache) => {
     const row = document.querySelector(
         `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
     );
@@ -171,6 +283,7 @@ const renderBar = async(discussionId, data) => {
         const container = document.createElement('div');
         container.innerHTML = html;
         const barElement = container.firstElementChild;
+        barElement.setAttribute('data-source', fromCache ? 'cache' : 'live');
 
         // Replace skeleton if present, otherwise insert at the usual location.
         const skeleton = row.querySelector('[data-region="reactions-skeleton"]');
@@ -194,6 +307,111 @@ const renderBar = async(discussionId, data) => {
             }
         }
         Templates.runTemplateJS(js);
+    } catch (err) {
+        Notification.exception(err);
+    }
+};
+
+/**
+ * Compare cached and fresh reaction data to find differences.
+ *
+ * @param {Object} cachedData Cached reaction data (counts only).
+ * @param {Object} freshData Fresh reaction data from web service.
+ * @returns {Object} Diffs object.
+ */
+const computeDiffs = (cachedData, freshData) => {
+    const cachedCounts = {};
+    (cachedData?.counts || []).forEach((c) => {
+        cachedCounts[c.emoji] = c.count;
+    });
+
+    const freshCounts = {};
+    (freshData?.counts || []).forEach((c) => {
+        freshCounts[c.emoji] = c.count;
+    });
+
+    const changedEmojis = new Set();
+    const newEmojis = new Set();
+    const removedEmojis = new Set();
+
+    for (const emoji of Object.keys(freshCounts)) {
+        if (!(emoji in cachedCounts)) {
+            if (freshCounts[emoji] > 0) {
+                newEmojis.add(emoji);
+            }
+        } else if (freshCounts[emoji] !== cachedCounts[emoji]) {
+            changedEmojis.add(emoji);
+        }
+    }
+
+    for (const emoji of Object.keys(cachedCounts)) {
+        if (cachedCounts[emoji] > 0 && (!(emoji in freshCounts) || freshCounts[emoji] === 0)) {
+            removedEmojis.add(emoji);
+        }
+    }
+
+    const hasChanges = changedEmojis.size > 0 || newEmojis.size > 0 || removedEmojis.size > 0;
+
+    return {hasChanges, changedEmojis, newEmojis, removedEmojis};
+};
+
+/**
+ * Re-render a discussion reactions bar with animation for changed counts.
+ *
+ * @param {number} discussionId The forum discussion ID.
+ * @param {Object} freshData Fresh reaction data from the web service.
+ * @param {Object} diffs The diff result from computeDiffs.
+ */
+const rerenderBarWithAnimation = async(discussionId, freshData, diffs) => {
+    const row = document.querySelector(
+        `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
+    );
+    if (!row) {
+        return;
+    }
+
+    const existingBar = row.querySelector('[data-region="reactions-bar"]');
+    if (!existingBar) {
+        return;
+    }
+
+    const context = buildTemplateContext(freshData);
+
+    try {
+        const {html, js} = await Templates.renderForPromise('local_reactions/discussion_list_reactions', context);
+        const container = document.createElement('div');
+        container.innerHTML = html;
+        const newBar = container.firstElementChild;
+        newBar.setAttribute('data-source', 'live');
+
+        // Apply animation classes to changed pills.
+        if (!config.compactview) {
+            newBar.querySelectorAll('[data-emoji]').forEach((pill) => {
+                const emoji = pill.getAttribute('data-emoji');
+                if (diffs.changedEmojis.has(emoji)) {
+                    pill.classList.add('local-reactions-count-changed');
+                }
+                if (diffs.newEmojis.has(emoji)) {
+                    pill.classList.add('local-reactions-pill-new');
+                }
+            });
+        } else {
+            const compactPill = newBar.querySelector('.local-reactions-pill-compact');
+            if (compactPill) {
+                compactPill.classList.add('local-reactions-count-changed');
+            }
+        }
+
+        existingBar.replaceWith(newBar);
+        Templates.runTemplateJS(js);
+
+        // Remove animation classes after animation completes.
+        setTimeout(() => {
+            newBar.querySelectorAll('.local-reactions-count-changed, .local-reactions-pill-new')
+                .forEach((el) => {
+                    el.classList.remove('local-reactions-count-changed', 'local-reactions-pill-new');
+                });
+        }, ANIMATION_TIMEOUT);
     } catch (err) {
         Notification.exception(err);
     }

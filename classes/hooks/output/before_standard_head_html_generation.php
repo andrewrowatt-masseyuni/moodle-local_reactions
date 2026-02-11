@@ -61,11 +61,7 @@ class before_standard_head_html_generation {
             return;
         }
 
-        $keyframes = '@keyframes local-reactions-reserve-shimmer{'
-            . '0%{background-position:200% 0}'
-            . '100%{background-position:-200% 0}'
-            . '}';
-
+        // Both branches reuse the local-reactions-shimmer keyframes from styles.css.
         if ($pagetype === 'mod-forum-view') {
             $width = !empty($record->compactview_list) ? '80px' : '52px';
 
@@ -78,7 +74,7 @@ class before_standard_head_html_generation {
                 . 'border-radius:16px;'
                 . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
                 . 'background-size:200% 100%;'
-                . 'animation:local-reactions-reserve-shimmer 1.5s ease-in-out infinite;'
+                . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
                 . '}';
         } else {
             $width = !empty($record->compactview_discuss) ? '80px' : '52px';
@@ -93,10 +89,10 @@ class before_standard_head_html_generation {
                 . 'border-radius:16px;'
                 . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
                 . 'background-size:200% 100%;'
-                . 'animation:local-reactions-reserve-shimmer 1.5s ease-in-out infinite;'
+                . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
                 . '}';
         }
 
-        $hook->add_html('<style id="local-reactions-reserve">' . $css . $keyframes . '</style>');
+        $hook->add_html('<style id="local-reactions-reserve">' . $css . '</style>');
     }
 }

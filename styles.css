@@ -198,7 +198,7 @@
     }
 
     40% {
-        transform: scale(2);
+        transform: scale(1.5);
         background-color: #fff3cd;
     }
 

@@ -35,6 +35,15 @@ let config = {};
 /** @var {number} Duration in ms to keep animation classes before removal. */
 const ANIMATION_TIMEOUT = 2100;
 
+/** @var {Object} Tracks last-rendered reaction data per post ID for diff computation during polling. */
+let currentDataMap = {};
+
+/** @var {boolean} Whether a toggle request is in-flight (prevents poll from racing with toggle). */
+let toggleInProgress = false;
+
+/** @var {number|null} setInterval ID for polling, or null if not polling. */
+let pollTimer = null;
+
 /**
  * Initialise the reactions module.
  *
@@ -211,6 +220,8 @@ const loadReactions = async() => {
                 await renderBar(postId, freshData, false);
             }
 
+            currentDataMap[postId] = freshData;
+
             if (cacheAvailable) {
                 cacheEntries.push({
                     key: Cache.itemKey(config.component, config.itemtype, postId),
@@ -225,6 +236,8 @@ const loadReactions = async() => {
     } catch (err) {
         Notification.exception(err);
     }
+
+    startPolling();
 };
 
 /**
@@ -491,6 +504,7 @@ const bindHandlers = (barElement, postId) => {
 const toggleReaction = async(postId, emoji, barElement) => {
     // Disable all interactive elements during the request.
     barElement.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', 'disabled'));
+    toggleInProgress = true;
 
     try {
         const response = await Ajax.call([{
@@ -520,6 +534,8 @@ const toggleReaction = async(postId, emoji, barElement) => {
         Templates.runTemplateJS(js);
         bindHandlers(newBar, postId);
 
+        currentDataMap[postId] = freshData;
+
         // Update the cache with counts only.
         const cacheAvailable = await Cache.isAvailable();
         if (cacheAvailable) {
@@ -532,5 +548,105 @@ const toggleReaction = async(postId, emoji, barElement) => {
         Notification.exception(err);
         // Re-enable buttons on error.
         barElement.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
+    } finally {
+        toggleInProgress = false;
+    }
+};
+
+/**
+ * Start periodic polling for reaction updates from other users.
+ *
+ * Respects Page Visibility API: pauses when tab is hidden, resumes on focus.
+ */
+const startPolling = () => {
+    if (!config.pollinterval || config.pollinterval <= 0 || pollTimer) {
+        return;
+    }
+
+    pollTimer = setInterval(pollReactions, config.pollinterval * 1000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        } else if (!pollTimer) {
+            pollReactions();
+            pollTimer = setInterval(pollReactions, config.pollinterval * 1000);
+        }
+    });
+};
+
+/**
+ * Poll the server for updated reaction data and animate any changes.
+ */
+const pollReactions = async() => {
+    if (toggleInProgress) {
+        return;
+    }
+
+    const articles = document.querySelectorAll('article[data-post-id]');
+    if (!articles.length) {
+        return;
+    }
+
+    const postIds = [];
+    articles.forEach((article) => {
+        const postId = parseInt(article.getAttribute('data-post-id'));
+        if (postId) {
+            postIds.push(postId);
+        }
+    });
+
+    if (!postIds.length) {
+        return;
+    }
+
+    try {
+        const response = await Ajax.call([{
+            methodname: 'local_reactions_get_reactions',
+            args: {
+                component: config.component,
+                itemtype: config.itemtype,
+                itemids: postIds,
+                contextid: config.contextid,
+            },
+        }])[0];
+
+        const reactionsMap = {};
+        response.items.forEach((item) => {
+            reactionsMap[item.itemid] = item;
+        });
+
+        const cacheAvailable = await Cache.isAvailable();
+        const cacheEntries = [];
+
+        for (const postId of postIds) {
+            const freshData = reactionsMap[postId] || {itemid: postId, userreactions: [], counts: []};
+            const previousData = currentDataMap[postId];
+
+            if (previousData) {
+                const diffs = computeDiffs(previousData, freshData);
+                if (diffs.hasChanges) {
+                    await rerenderBarWithAnimation(postId, freshData, diffs);
+                }
+            }
+
+            currentDataMap[postId] = freshData;
+
+            if (cacheAvailable) {
+                cacheEntries.push({
+                    key: Cache.itemKey(config.component, config.itemtype, postId),
+                    data: {counts: freshData.counts || []},
+                });
+            }
+        }
+
+        if (cacheEntries.length > 0) {
+            await Cache.setMultiple(cacheEntries);
+        }
+    } catch {
+        // Silently ignore poll errors to avoid disrupting the user.
     }
 };

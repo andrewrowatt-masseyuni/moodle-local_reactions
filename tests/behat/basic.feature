@@ -97,6 +97,8 @@ Feature: Forum reactions and reporting
       | student9  | Hello from Student Two | thanks |
       | student10 | Hello from Student Two | thanks |
 
+    And I change the window size to "large"
+
   Scenario: Student can react to a post via the emoji picker
     Given I log in as "student4"
     And I am on the "Introductions" "forum activity" page
@@ -205,6 +207,25 @@ Feature: Forum reactions and reporting
     Then ".local-reactions-empty" "css_element" should exist in the "Unreacted topic" "table_row"
     And ".local-reactions-empty" "css_element" should not exist in the "Reacted topic" "table_row"
     And "[data-emoji='thumbsup']" "css_element" should exist in the "Reacted topic" "table_row"
+
+  Scenario: Reactions appear on the post reply page with full interactivity
+    Given I log in as "student4"
+    And I am on the reply page for "Hello from Student One"
+    And I wait for reactions to load
+    # Existing counts: thumbsup:7, laugh:2, think:1, thanks:1.
+    Then the "thumbsup" reaction count should be 7
+    And the "laugh" reaction count should be 2
+    And the "think" reaction count should be 1
+    And the "thanks" reaction count should be 1
+    # Emojis with zero reactions should not show pills.
+    And I should not see the "celebrate" reaction pill
+    And I should not see the "heart" reaction pill
+    # Add a new celebrate reaction via the picker on the post page.
+    When I open the reactions picker
+    And I react with "celebrate"
+    Then the "celebrate" reaction count should be 1
+    # Existing counts should be unchanged.
+    And the "thumbsup" reaction count should be 7
 
   Scenario: Student cannot access the reactions report
     # The report navigation link should not exist in page source for students.

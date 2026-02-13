@@ -38,7 +38,7 @@ class before_footer_html_generation {
 
         // Only load on forum pages.
         $pagetype = $PAGE->pagetype;
-        if ($pagetype !== 'mod-forum-discuss' && $pagetype !== 'mod-forum-view') {
+        if (!in_array($pagetype, ['mod-forum-discuss', 'mod-forum-view', 'mod-forum-post'])) {
             return;
         }
 
@@ -61,8 +61,8 @@ class before_footer_html_generation {
         $emojiset = \local_reactions\manager::get_emoji_set();
         $pollinterval = (int) get_config('local_reactions', 'pollinterval');
 
-        if ($pagetype === 'mod-forum-discuss') {
-            // Individual discussion page: full interactive reactions.
+        if ($pagetype === 'mod-forum-discuss' || $pagetype === 'mod-forum-post') {
+            // Individual discussion/post page: full interactive reactions.
             $canreact = has_capability('local/reactions:react', $context);
 
             $PAGE->requires->js_call_amd('local_reactions/reactions', 'init', [

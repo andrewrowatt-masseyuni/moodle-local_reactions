@@ -43,7 +43,7 @@ class before_standard_head_html_generation {
         }
 
         $pagetype = $PAGE->pagetype;
-        if ($pagetype !== 'mod-forum-view' && $pagetype !== 'mod-forum-discuss') {
+        if (!in_array($pagetype, ['mod-forum-view', 'mod-forum-discuss', 'mod-forum-post'])) {
             return;
         }
 
@@ -61,37 +61,37 @@ class before_standard_head_html_generation {
             return;
         }
 
-        // Both branches reuse the local-reactions-shimmer keyframes from styles.css.
-        if ($pagetype === 'mod-forum-view') {
-            $width = !empty($record->compactview_list) ? '80px' : '52px';
+        // Each page type has a different CSS selector and skeleton dimensions.
+        // All branches reuse the local-reactions-shimmer keyframes from styles.css.
+        $skeletons = [
+            'mod-forum-post' => [
+                'compact' => $record->compactview_discuss,
+                'selector' => '.content-alignment-container::after',
+                'extra' => 'display:block;height:28px;margin-top:8px;',
+            ],
+            'mod-forum-view' => [
+                'compact' => $record->compactview_list,
+                'selector' => '[data-region="discussion-list-item"] th.topic .p-3::after',
+                'extra' => 'display:block;height:28px;margin-top:0px;',
+            ],
+            'mod-forum-discuss' => [
+                'compact' => $record->compactview_discuss,
+                'selector' => 'article[data-post-id] .d-flex.flex-wrap:has(>[data-region="post-actions-container"])::before',
+                'extra' => 'height:26px;margin:calc(0.5rem + 2px) 0 4px 0;',
+            ],
+        ];
+        $s = $skeletons[$pagetype];
+        $width = !empty($s['compact']) ? '80px' : '52px';
 
-            $css = '[data-region="discussion-list-item"] th.topic .p-3::after {'
-                . 'content:\'\';'
-                . 'display:block;'
-                . "width:{$width};"
-                . 'height:28px;'
-                . 'margin-top:0px;'
-                . 'border-radius:16px;'
-                . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
-                . 'background-size:200% 100%;'
-                . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
-                . '}';
-        } else {
-            $width = !empty($record->compactview_discuss) ? '80px' : '52px';
-
-            // Target the flex-wrap parent of post-actions-container using :has().
-            // The ::before becomes a flex item at the start, matching where the real bar is inserted.
-            $css = 'article[data-post-id] .d-flex.flex-wrap:has(>[data-region="post-actions-container"])::before{'
-                . 'content:\'\';'
-                . "width:{$width};"
-                . 'height:26px;'
-                . 'margin:calc(0.5rem + 2px) 0 4px 0;'
-                . 'border-radius:16px;'
-                . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
-                . 'background-size:200% 100%;'
-                . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
-                . '}';
-        }
+        $css = $s['selector'] . '{'
+            . 'content:\'\';'
+            . $s['extra']
+            . "width:{$width};"
+            . 'border-radius:16px;'
+            . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
+            . 'background-size:200% 100%;'
+            . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
+            . '}';
 
         $hook->add_html('<style id="local-reactions-reserve">' . $css . '</style>');
     }

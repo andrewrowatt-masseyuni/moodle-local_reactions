@@ -93,7 +93,11 @@ const closeAllPickers = () => {
 };
 
 /**
- * Insert an element before the post actions container, or append to post core.
+ * Insert an element before the post actions container, or append to the content alignment container.
+ *
+ * On the discussion page the actions container is present; on the post page
+ * (readonly parent post) it is absent so we fall back to appending to the
+ * content-alignment-container div.
  *
  * @param {HTMLElement} article The article element.
  * @param {HTMLElement} element The element to insert.
@@ -102,11 +106,16 @@ const insertBeforeActions = (article, element) => {
     const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
     if (actionsContainer) {
         actionsContainer.parentElement.insertBefore(element, actionsContainer);
-    } else {
-        const postCore = article.querySelector('[data-region-content="forum-post-core"]');
-        if (postCore) {
-            postCore.appendChild(element);
-        }
+        return;
+    }
+    const alignContainer = article.querySelector('.content-alignment-container');
+    if (alignContainer) {
+        alignContainer.appendChild(element);
+        return;
+    }
+    const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+    if (postCore) {
+        postCore.appendChild(element);
     }
 };
 

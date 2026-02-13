@@ -127,6 +127,19 @@ class behat_local_reactions extends behat_base {
     }
 
     /**
+     * Navigate to the reply page (post.php?reply=ID) for a post by its subject.
+     *
+     * @Given I am on the reply page for :postsubject
+     * @param string $postsubject The subject of the post to reply to.
+     */
+    public function i_am_on_the_reply_page_for(string $postsubject): void {
+        global $DB;
+        $postid = $DB->get_field('forum_posts', 'id', ['subject' => $postsubject], MUST_EXIST);
+        $url = new moodle_url('/mod/forum/post.php', ['reply' => $postid]);
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+    }
+
+    /**
      * Wait for live (non-cached) reactions to finish loading.
      *
      * @Given I wait for live reactions to load

@@ -28,6 +28,8 @@ defined('MOODLE_INTERNAL') || die();
 $string['activeposters'] = 'Active posters';
 $string['activereactors'] = 'Active reactors';
 $string['addreaction'] = 'React with {$a}';
+$string['allowmultiplereactions'] = 'Enable multiple reactions per-user per-post (Recommended)';
+$string['allowmultiplereactions_help'] = 'When enabled, users can react to each post with more than one emoji. When disabled, each user may only react with a single emoji per post — clicking a new emoji automatically replaces their previous one.<br><br><strong>Note:</strong> This setting cannot be switched from multiple to single once reactions exist in the forum. You can always switch from single to multiple.';
 $string['compactview_discuss'] = 'Use compact view for individual posts';
 $string['compactview_discuss_help'] = 'When enabled, reactions on individual forum posts are displayed as a single pill showing all reacted emojis followed by the total count, similar to Facebook or WhatsApp.';
 $string['compactview_list'] = 'Use compact view for discussion overview';

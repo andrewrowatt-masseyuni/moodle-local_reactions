@@ -365,9 +365,8 @@ const bindHandlers = (barElement, postId) => {
                 // Position the picker using fixed coordinates to escape overflow:hidden parents.
                 const rect = trigger.getBoundingClientRect();
                 picker.style.left = rect.left + 'px';
-                picker.style.top = (rect.top - picker.offsetHeight - 6) + 'px';
                 picker.hidden = false;
-                // Re-calculate now that it's visible and has a real height.
+                // Calculate top now that it's visible and has a real height.
                 picker.style.top = (rect.top - picker.offsetHeight - 6) + 'px';
                 trigger.setAttribute('aria-expanded', 'true');
             }
@@ -438,8 +437,9 @@ const toggleReaction = async(postId, emoji, barElement) => {
         );
     } catch (err) {
         Notification.exception(err);
-        // Re-enable buttons on error.
-        barElement.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
+        // Re-enable buttons on error — if barElement was already replaced, target the live bar.
+        const activeBar = document.querySelector(`article[data-post-id="${postId}"] [data-region="reactions-bar"]`);
+        (activeBar || barElement).querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
     } finally {
         toggleInProgress = false;
     }

@@ -119,6 +119,10 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
 function local_reactions_coursemodule_edit_post_actions($data, $course): stdClass {
     global $DB;
 
+    if (!get_config('local_reactions', 'enabled')) {
+        return $data;
+    }
+
     // Only process forums.
     if (!isset($data->modulename) || $data->modulename !== 'forum') {
         return $data;

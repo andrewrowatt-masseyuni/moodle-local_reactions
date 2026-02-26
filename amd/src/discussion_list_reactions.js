@@ -39,6 +39,9 @@ let config = {};
 /** @var {Object} Tracks last-rendered reaction data per discussion ID for diff computation during polling. */
 let currentDataMap = {};
 
+/** @var {boolean} Whether polling has been initialised. */
+let pollingInitialised = false;
+
 /**
  * Initialise the discussion list reactions module.
  *
@@ -252,7 +255,10 @@ const loadDiscussionReactions = async() => {
     }
 
     removeSkeletons();
-    createPoller(config.pollinterval, pollDiscussionReactions);
+    if (!pollingInitialised) {
+        pollingInitialised = true;
+        createPoller(config.pollinterval, pollDiscussionReactions);
+    }
 };
 
 /**

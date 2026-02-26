@@ -60,6 +60,7 @@ $string['reactions:react'] = 'React to forum posts with emoji';
 $string['reactions:view'] = 'View emoji reactions on forum posts';
 $string['reactions:viewreport'] = 'View reactions report';
 $string['reactionsheader'] = 'Reactions';
+$string['reactionsnotenabled'] = 'Reactions are not enabled for this forum.';
 $string['reactionsreport'] = 'Reactions report';
 $string['reactionssettings'] = 'Reactions';
 $string['reactionsvspostratio'] = 'Reactions to posts ratio';

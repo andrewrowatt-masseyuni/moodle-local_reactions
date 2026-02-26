@@ -93,8 +93,12 @@ class manager {
             $DB->delete_records('local_reactions', ['id' => $existing->id]);
             return ['action' => 'removed', 'emoji' => $emoji];
         } else {
-            // In single-reaction mode, remove all other reactions for this user on this item.
+            // In single-reaction mode, wrap the delete-then-insert atomically so that
+            // concurrent requests from the same user cannot both slip through and add
+            // multiple reactions in a mode that is meant to allow only one.
+            $transaction = null;
             if (!$allowmultiple) {
+                $transaction = $DB->start_delegated_transaction();
                 $DB->delete_records('local_reactions', [
                     'component' => $component,
                     'itemtype'  => $itemtype,
@@ -111,6 +115,9 @@ class manager {
             $record->emoji = $emoji;
             $record->timecreated = time();
             $DB->insert_record('local_reactions', $record);
+            if ($transaction) {
+                $DB->commit_delegated_transaction($transaction);
+            }
             return ['action' => 'added', 'emoji' => $emoji];
         }
     }

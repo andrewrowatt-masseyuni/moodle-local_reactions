@@ -91,10 +91,13 @@ class toggle_reaction extends external_api {
         self::validate_context($context);
         require_capability('local/reactions:react', $context);
 
-        // Look up per-forum setting to determine if multiple reactions are allowed.
+        // Look up per-forum setting to determine if reactions are enabled and if multiple are allowed.
         $cm = get_coursemodule_from_instance('forum', $forum->get_id(), 0, false, MUST_EXIST);
         $forumconfig = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
-        $allowmultiple = !$forumconfig || (bool) $forumconfig->allowmultiplereactions;
+        if (!$forumconfig || !$forumconfig->enabled) {
+            throw new \moodle_exception('reactionsnotenabled', 'local_reactions');
+        }
+        $allowmultiple = (bool) $forumconfig->allowmultiplereactions;
 
         $result = manager::toggle_reaction(
             $params['component'],

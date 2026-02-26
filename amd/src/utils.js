@@ -97,7 +97,7 @@ export const computeDiffs = (cachedData, freshData) => {
  */
 export const buildTemplateContext = (data, emojis, {canreact = false, compactview = false, userreactions = []} = {}) => {
     const countsMap = {};
-    data.counts.forEach((c) => {
+    (data?.counts || []).forEach((c) => {
         countsMap[c.emoji] = c.count;
     });
 

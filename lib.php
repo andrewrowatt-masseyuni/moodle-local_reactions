@@ -100,19 +100,9 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
 
         // Lock the checkbox when already in "allow multiple" mode and reactions exist.
         // Once reactions are present you cannot downgrade to single-reaction mode.
-        $multimode = !$record || !empty($record->allowmultiplereactions);
-        if ($multimode) {
-            $hasreactions = $DB->record_exists_sql(
-                'SELECT 1
-                   FROM {local_reactions} lr
-                   JOIN {forum_posts} fp ON lr.itemid = fp.id
-                   JOIN {forum_discussions} fd ON fp.discussion = fd.id
-                  WHERE fd.forum = :forumid
-                    AND lr.component = :component
-                    AND lr.itemtype = :itemtype',
-                ['forumid' => $cm->instance, 'component' => 'mod_forum', 'itemtype' => 'post']
-            );
-            if ($hasreactions) {
+        $ismultiplereactionsenabled = !$record || !empty($record->allowmultiplereactions);
+        if ($ismultiplereactionsenabled) {
+            if (\local_reactions\manager::forum_has_reactions($cm->instance)) {
                 $mform->hardFreeze('local_reactions_allowmultiplereactions');
             }
         }
@@ -144,17 +134,8 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
 
     // Server-side safety: prevent switching multiple→single when reactions already exist.
     if ($existing && !empty($existing->allowmultiplereactions) && !$allowmultiple) {
-        $hasreactions = $DB->record_exists_sql(
-            'SELECT 1
-               FROM {local_reactions} lr
-               JOIN {forum_posts} fp ON lr.itemid = fp.id
-               JOIN {forum_discussions} fd ON fp.discussion = fd.id
-              WHERE fd.forum = (SELECT instance FROM {course_modules} WHERE id = :cmid)
-                AND lr.component = :component
-                AND lr.itemtype = :itemtype',
-            ['cmid' => $cmid, 'component' => 'mod_forum', 'itemtype' => 'post']
-        );
-        if ($hasreactions) {
+        $forumid = $DB->get_field('course_modules', 'instance', ['id' => $cmid]);
+        if (\local_reactions\manager::forum_has_reactions($forumid)) {
             $allowmultiple = 1;
         }
     }

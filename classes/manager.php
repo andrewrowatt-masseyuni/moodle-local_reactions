@@ -53,6 +53,8 @@ class manager {
      * Toggle a reaction. If the user already has this emoji on the item, remove it.
      * Otherwise add it. When $allowmultiple is false, any existing reactions by this
      * user on the same item are removed before adding the new one (single-reaction mode).
+     * When $allowmultiple is true (the default), users can have multiple different emoji
+     * reactions on the same item, preserving the existing multi-reaction behavior.
      *
      * @param string $component Component name e.g. mod_forum.
      * @param string $itemtype Item type e.g. post.
@@ -175,6 +177,26 @@ class manager {
         }
 
         return $result;
+    }
+
+    /**
+     * Check whether any reactions exist for posts belonging to a given forum.
+     *
+     * @param int $forumid The forum instance ID (forum.id).
+     * @return bool True if at least one reaction exists.
+     */
+    public static function forum_has_reactions(int $forumid): bool {
+        global $DB;
+        return $DB->record_exists_sql(
+            'SELECT 1
+               FROM {local_reactions} lr
+               JOIN {forum_posts} fp ON lr.itemid = fp.id
+               JOIN {forum_discussions} fd ON fp.discussion = fd.id
+              WHERE fd.forum = :forumid
+                AND lr.component = :component
+                AND lr.itemtype = :itemtype',
+            ['forumid' => $forumid, 'component' => 'mod_forum', 'itemtype' => 'post']
+        );
     }
 
     /**

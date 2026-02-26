@@ -52,6 +52,27 @@ Feature: Backup and restore forum with reactions
     And I expand all fieldsets
     Then the field "Enable emoji reactions" matches value "1"
 
+  Scenario: Backup and restore a course preserves the single reaction setting
+    # Disable async backup for Behat.
+    Given the following config values are set as admin:
+      | enableasyncbackup | 0 |
+    # Switch the test forum to single-reaction mode.
+    And the following "local_reactions > enabled forums" exist:
+      | forum      | course | enabled | allowmultiplereactions |
+      | Test Forum | C1     | 1       | 0                      |
+    And I log in as "admin"
+    And I backup "Course 1" course using this options:
+      | Initial      | Include enrolled users | 1                     |
+      | Confirmation | Filename               | test_single_react.mbz |
+    And I restore "test_single_react.mbz" backup into a new course using this options:
+      | Schema | Course name       | Course 1 single restored |
+      | Schema | Course short name | C1SR                     |
+    Then I should see "Test Forum"
+    When I follow "Test Forum"
+    And I navigate to "Settings" in current page administration
+    And I expand all fieldsets
+    Then the field "Enable multiple reactions per-user per-post (Recommended)" matches value "0"
+
   Scenario: Backup and restore a course preserves reactions with user data
     # Disable async backup for Behat.
     Given the following config values are set as admin:

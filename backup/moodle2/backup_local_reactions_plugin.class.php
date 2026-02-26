@@ -40,7 +40,7 @@ class backup_local_reactions_plugin extends backup_local_plugin {
 
         // Per-forum settings (always included).
         $settings = new backup_nested_element('reactions_enabled', ['id'], [
-            'enabled', 'compactview_list', 'compactview_discuss',
+            'enabled', 'compactview_list', 'compactview_discuss', 'allowmultiplereactions',
         ]);
         $pluginwrapper->add_child($settings);
         $settings->set_source_table('local_reactions_enabled', ['cmid' => backup::VAR_MODID]);

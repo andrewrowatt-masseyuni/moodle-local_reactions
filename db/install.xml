@@ -30,6 +30,7 @@
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = reactions enabled"/>
         <FIELD NAME="compactview_list" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on discussion list page"/>
         <FIELD NAME="compactview_discuss" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on individual discussion page"/>
+        <FIELD NAME="allowmultiplereactions" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" COMMENT="1 = users may react with multiple emoji per post (default); 0 = single emoji per user per post"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

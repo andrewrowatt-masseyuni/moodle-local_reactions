@@ -51,13 +51,15 @@ class manager {
 
     /**
      * Toggle a reaction. If the user already has this emoji on the item, remove it.
-     * Otherwise add it. Users can have multiple different emoji on the same item.
+     * Otherwise add it. When $allowmultiple is false, any existing reactions by this
+     * user on the same item are removed before adding the new one (single-reaction mode).
      *
      * @param string $component Component name e.g. mod_forum.
      * @param string $itemtype Item type e.g. post.
      * @param int $itemid Item ID.
      * @param int $userid User ID.
      * @param string $emoji Emoji shortcode.
+     * @param bool $allowmultiple When false, enforce single-reaction-per-post mode.
      * @return array ['action' => 'added'|'removed', 'emoji' => string]
      */
     public static function toggle_reaction(
@@ -65,7 +67,8 @@ class manager {
         string $itemtype,
         int $itemid,
         int $userid,
-        string $emoji
+        string $emoji,
+        bool $allowmultiple = true
     ): array {
         global $DB;
 
@@ -88,6 +91,15 @@ class manager {
             $DB->delete_records('local_reactions', ['id' => $existing->id]);
             return ['action' => 'removed', 'emoji' => $emoji];
         } else {
+            // In single-reaction mode, remove all other reactions for this user on this item.
+            if (!$allowmultiple) {
+                $DB->delete_records('local_reactions', [
+                    'component' => $component,
+                    'itemtype'  => $itemtype,
+                    'itemid'    => $itemid,
+                    'userid'    => $userid,
+                ]);
+            }
             // Add the reaction.
             $record = new \stdClass();
             $record->component = $component;

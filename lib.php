@@ -71,6 +71,17 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
     $mform->addHelpButton('local_reactions_compactview_discuss', 'compactview_discuss', 'local_reactions');
     $mform->hideIf('local_reactions_compactview_discuss', 'local_reactions_enabled');
 
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_allowmultiplereactions',
+        get_string('allowmultiplereactions', 'local_reactions')
+    );
+    $mform->addHelpButton('local_reactions_allowmultiplereactions', 'allowmultiplereactions', 'local_reactions');
+    $mform->hideIf('local_reactions_allowmultiplereactions', 'local_reactions_enabled');
+
+    // Default to allowing multiple reactions (can be overridden below if record says otherwise).
+    $mform->setDefault('local_reactions_allowmultiplereactions', 1);
+
     // Set current values from the database.
     if ($cmid = $cm->coursemodule) {
         $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
@@ -82,6 +93,28 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
         }
         if ($record && !empty($record->compactview_discuss)) {
             $mform->setDefault('local_reactions_compactview_discuss', 1);
+        }
+        if ($record && isset($record->allowmultiplereactions) && !$record->allowmultiplereactions) {
+            $mform->setDefault('local_reactions_allowmultiplereactions', 0);
+        }
+
+        // Lock the checkbox when already in "allow multiple" mode and reactions exist.
+        // Once reactions are present you cannot downgrade to single-reaction mode.
+        $multimode = !$record || !empty($record->allowmultiplereactions);
+        if ($multimode) {
+            $hasreactions = $DB->record_exists_sql(
+                'SELECT 1
+                   FROM {local_reactions} lr
+                   JOIN {forum_posts} fp ON lr.itemid = fp.id
+                   JOIN {forum_discussions} fd ON fp.discussion = fd.id
+                  WHERE fd.forum = :forumid
+                    AND lr.component = :component
+                    AND lr.itemtype = :itemtype',
+                ['forumid' => $cm->instance, 'component' => 'mod_forum', 'itemtype' => 'post']
+            );
+            if ($hasreactions) {
+                $mform->hardFreeze('local_reactions_allowmultiplereactions');
+            }
         }
     }
 }
@@ -104,13 +137,33 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     $enabled = !empty($data->local_reactions_enabled) ? 1 : 0;
     $compactviewlist = !empty($data->local_reactions_compactview_list) ? 1 : 0;
     $compactviewdiscuss = !empty($data->local_reactions_compactview_discuss) ? 1 : 0;
+    $allowmultiple = !empty($data->local_reactions_allowmultiplereactions) ? 1 : 0;
     $cmid = $data->coursemodule;
 
     $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
+
+    // Server-side safety: prevent switching multiple→single when reactions already exist.
+    if ($existing && !empty($existing->allowmultiplereactions) && !$allowmultiple) {
+        $hasreactions = $DB->record_exists_sql(
+            'SELECT 1
+               FROM {local_reactions} lr
+               JOIN {forum_posts} fp ON lr.itemid = fp.id
+               JOIN {forum_discussions} fd ON fp.discussion = fd.id
+              WHERE fd.forum = (SELECT instance FROM {course_modules} WHERE id = :cmid)
+                AND lr.component = :component
+                AND lr.itemtype = :itemtype',
+            ['cmid' => $cmid, 'component' => 'mod_forum', 'itemtype' => 'post']
+        );
+        if ($hasreactions) {
+            $allowmultiple = 1;
+        }
+    }
+
     if ($existing) {
         $existing->enabled = $enabled;
         $existing->compactview_list = $compactviewlist;
         $existing->compactview_discuss = $compactviewdiscuss;
+        $existing->allowmultiplereactions = $allowmultiple;
         $DB->update_record('local_reactions_enabled', $existing);
     } else {
         $DB->insert_record('local_reactions_enabled', (object) [
@@ -118,6 +171,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
             'enabled' => $enabled,
             'compactview_list' => $compactviewlist,
             'compactview_discuss' => $compactviewdiscuss,
+            'allowmultiplereactions' => $allowmultiple,
         ]);
     }
 

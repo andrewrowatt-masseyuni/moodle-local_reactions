@@ -36,7 +36,7 @@ class before_standard_head_html_generation {
      * @param \core\hook\output\before_standard_head_html_generation $hook
      */
     public static function callback(\core\hook\output\before_standard_head_html_generation $hook): void {
-        global $PAGE, $DB;
+        global $PAGE;
 
         if (!get_config('local_reactions', 'enabled')) {
             return;
@@ -51,7 +51,7 @@ class before_standard_head_html_generation {
         if (!$cm) {
             return;
         }
-        $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $record = \local_reactions\manager::get_forum_config($cm->id);
         if (!$record || !$record->enabled) {
             return;
         }

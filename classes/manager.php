@@ -27,12 +27,28 @@ class manager {
     /** @var string Default emoji set as comma-separated shortcode:unicode pairs. */
     const DEFAULT_EMOJIS = 'thumbsup:👍,heart:❤️,laugh:😂,think:🤔,celebrate:🎉,surprise:😮,thanks:🙏';
 
+    /** @var string Canonical component name for forum post reactions. */
+    public const COMPONENT_FORUM = 'mod_forum';
+
+    /** @var string Canonical item type for forum post reactions. */
+    public const ITEMTYPE_POST = 'post';
+
+    /** @var array<string,string>|null Per-request cache of the parsed emoji set. */
+    private static ?array $emojisetcache = null;
+
+    /** @var array<int,\stdClass|null> Per-request cache of forum config keyed by cmid. */
+    private static array $forumconfigcache = [];
+
     /**
      * Get the configured emoji set.
      *
      * @return array Associative array of shortcode => unicode emoji.
      */
     public static function get_emoji_set(): array {
+        if (self::$emojisetcache !== null) {
+            return self::$emojisetcache;
+        }
+
         $config = get_config('local_reactions', 'emojis');
         if (empty($config)) {
             $config = self::DEFAULT_EMOJIS;
@@ -46,7 +62,38 @@ class manager {
                 $emojis[trim($parts[0])] = trim($parts[1]);
             }
         }
-        return $emojis;
+        return self::$emojisetcache = $emojis;
+    }
+
+    /**
+     * Look up the per-forum reactions configuration for a course module.
+     *
+     * Results are cached per-request so repeated lookups (e.g. the two output hooks
+     * firing back-to-back on the same page render) hit the database only once.
+     *
+     * @param int $cmid Course module ID of the forum.
+     * @return \stdClass|null The local_reactions_enabled record, or null if none exists.
+     */
+    public static function get_forum_config(int $cmid): ?\stdClass {
+        if (!\array_key_exists($cmid, self::$forumconfigcache)) {
+            global $DB;
+            $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
+            self::$forumconfigcache[$cmid] = $record ?: null;
+        }
+        return self::$forumconfigcache[$cmid];
+    }
+
+    /**
+     * Clear the in-memory forum config cache so subsequent reads see fresh data.
+     *
+     * @param int|null $cmid Clear only this cmid, or pass null to clear the whole cache.
+     */
+    public static function clear_forum_config_cache(?int $cmid = null): void {
+        if ($cmid === null) {
+            self::$forumconfigcache = [];
+            return;
+        }
+        unset(self::$forumconfigcache[$cmid]);
     }
 
     /**
@@ -92,34 +139,42 @@ class manager {
             // Already reacted with this emoji - remove it.
             $DB->delete_records('local_reactions', ['id' => $existing->id]);
             return ['action' => 'removed', 'emoji' => $emoji];
-        } else {
-            // In single-reaction mode, wrap the delete-then-insert atomically so that
-            // concurrent requests from the same user cannot both slip through and add
-            // multiple reactions in a mode that is meant to allow only one.
-            $transaction = null;
-            if (!$allowmultiple) {
-                $transaction = $DB->start_delegated_transaction();
-                $DB->delete_records('local_reactions', [
-                    'component' => $component,
-                    'itemtype'  => $itemtype,
-                    'itemid'    => $itemid,
-                    'userid'    => $userid,
-                ]);
-            }
-            // Add the reaction.
-            $record = new \stdClass();
-            $record->component = $component;
-            $record->itemtype = $itemtype;
-            $record->itemid = $itemid;
-            $record->userid = $userid;
-            $record->emoji = $emoji;
-            $record->timecreated = time();
-            $DB->insert_record('local_reactions', $record);
-            if ($transaction) {
-                $DB->commit_delegated_transaction($transaction);
-            }
-            return ['action' => 'added', 'emoji' => $emoji];
         }
+
+        // In single-reaction mode, wrap the delete-then-insert atomically so that
+        // concurrent requests from the same user cannot both slip through and add
+        // multiple reactions in a mode that is meant to allow only one.
+        $transaction = null;
+        if (!$allowmultiple) {
+            $transaction = $DB->start_delegated_transaction();
+            $DB->delete_records('local_reactions', [
+                'component' => $component,
+                'itemtype'  => $itemtype,
+                'itemid'    => $itemid,
+                'userid'    => $userid,
+            ]);
+        }
+        // Add the reaction. Two near-simultaneous requests for the same
+        // (user, item, emoji) can both reach this insert; the unique index will
+        // reject the loser with a dml_write_exception. Treat that as an idempotent
+        // success so a double-click does not surface as an error to the user.
+        $record = new \stdClass();
+        $record->component = $component;
+        $record->itemtype = $itemtype;
+        $record->itemid = $itemid;
+        $record->userid = $userid;
+        $record->emoji = $emoji;
+        $record->timecreated = time();
+        try {
+            $DB->insert_record('local_reactions', $record);
+        } catch (\dml_write_exception $e) {
+            // Row already exists thanks to a concurrent add - nothing more to do.
+            unset($e);
+        }
+        if ($transaction) {
+            $DB->commit_delegated_transaction($transaction);
+        }
+        return ['action' => 'added', 'emoji' => $emoji];
     }
 
     /**
@@ -156,7 +211,11 @@ class manager {
         $params['component'] = $component;
         $params['itemtype'] = $itemtype;
 
-        $sql = "SELECT CONCAT(itemid, '_', emoji) AS uid, itemid, emoji, COUNT(*) as total
+        // Synthesise a unique first column so get_records_sql can key the result rows
+        // (itemid alone is not unique when multiple emoji counts exist for one item).
+        // Use sql_concat() for cross-database portability (Oracle's CONCAT takes only 2 args).
+        $uid = $DB->sql_concat('itemid', "'_'", 'emoji');
+        $sql = "SELECT $uid AS uid, itemid, emoji, COUNT(*) as total
                   FROM {local_reactions}
                  WHERE component = :component
                    AND itemtype = :itemtype
@@ -193,6 +252,11 @@ class manager {
      * reactions made by the post author themselves and reactions made by users who do
      * not hold a student-archetype role in the course are excluded from the counts and
      * from the current user's reactions list.
+     *
+     * Note: in peer-only mode, a non-student viewer (e.g. a teacher opening the grading
+     * panel) always sees an empty 'userreactions' list, because only student-authored
+     * reactions are counted. This is intentional and matches the "peer reactions only"
+     * policy — any reactions the grader themselves added are deliberately hidden.
      *
      * @param string $component Component name e.g. mod_forum.
      * @param string $itemtype Item type e.g. post.
@@ -247,11 +311,10 @@ class manager {
      * @return bool True if peer-only filtering should be applied (defaults to true).
      */
     private static function is_only_peer_grading_enabled(\context $context): bool {
-        global $DB;
         if (!($context instanceof \context_module)) {
             return true;
         }
-        $record = $DB->get_record('local_reactions_enabled', ['cmid' => $context->instanceid]);
+        $record = self::get_forum_config($context->instanceid);
         if (!$record || !isset($record->onlypeerreactionsgrading)) {
             return true;
         }
@@ -285,7 +348,9 @@ class manager {
             'itemtype' => $itemtype,
         ]);
 
-        $sql = "SELECT CONCAT(r.itemid, '_', r.emoji) AS uid,
+        // Synthesise a unique first column for get_records_sql (cross-db portable).
+        $uid = $DB->sql_concat('r.itemid', "'_'", 'r.emoji');
+        $sql = "SELECT $uid AS uid,
                        r.itemid,
                        r.emoji,
                        COUNT(*) AS total
@@ -326,8 +391,10 @@ class manager {
     ): void {
         global $DB;
 
-        // Only students contribute reactions in peer-only mode.
-        if (!in_array((int) $userid, array_map('intval', $studentuserids), true)) {
+        // Only students contribute reactions in peer-only mode - a non-student viewer
+        // never has their own reactions listed here (get_student_userids() already
+        // returns plain ints so no conversion of the haystack is needed).
+        if (!in_array((int) $userid, $studentuserids, true)) {
             return;
         }
 
@@ -371,12 +438,11 @@ class manager {
             return [];
         }
 
+        // Single query covering every student-archetype role at once.
+        $users = get_role_users(array_keys($studentroles), $coursecontext, true, 'u.id', 'u.id');
         $userids = [];
-        foreach ($studentroles as $role) {
-            $users = get_role_users($role->id, $coursecontext, true, 'u.id', 'u.id');
-            foreach ($users as $u) {
-                $userids[(int) $u->id] = (int) $u->id;
-            }
+        foreach ($users as $u) {
+            $userids[(int) $u->id] = (int) $u->id;
         }
         return array_values($userids);
     }
@@ -397,7 +463,11 @@ class manager {
               WHERE fd.forum = :forumid
                 AND lr.component = :component
                 AND lr.itemtype = :itemtype',
-            ['forumid' => $forumid, 'component' => 'mod_forum', 'itemtype' => 'post']
+            [
+                'forumid' => $forumid,
+                'component' => self::COMPONENT_FORUM,
+                'itemtype' => self::ITEMTYPE_POST,
+            ]
         );
     }
 
@@ -434,7 +504,9 @@ class manager {
         $params['component'] = $component;
         $params['itemtype'] = $itemtype;
 
-        $sql = "SELECT CONCAT(fp.discussion, '_', r.emoji) AS uid,
+        // Synthesise a unique first column for get_records_sql (cross-db portable).
+        $uid = $DB->sql_concat('fp.discussion', "'_'", 'r.emoji');
+        $sql = "SELECT $uid AS uid,
                        fp.discussion AS discussionid,
                        r.emoji,
                        COUNT(*) AS total

@@ -14,35 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace local_reactions;
+
 /**
- * Reactions report page.
+ * Event observers for local_reactions.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-require_once(__DIR__ . '/../../config.php');
-require_once($CFG->libdir . '/adminlib.php');
-
-$courseid = required_param('id', PARAM_INT);
-
-$course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
-$context = context_course::instance($courseid);
-
-require_login($course);
-require_capability('local/reactions:viewreport', $context);
-
-$PAGE->set_url('/local/reactions/report.php', ['id' => $courseid]);
-$PAGE->set_context($context);
-$PAGE->set_title(get_string('reactionsreport', 'local_reactions'));
-$PAGE->set_heading($course->fullname);
-$PAGE->set_pagelayout('report');
-
-$report = new \local_reactions\report($courseid);
-/** @var \local_reactions\output\renderer $renderer */
-$renderer = $PAGE->get_renderer('local_reactions');
-
-echo $OUTPUT->header();
-echo $renderer->render_report($report);
-echo $OUTPUT->footer();
+class observer {
+    /**
+     * Clean up reactions belonging to a forum post that has just been deleted.
+     *
+     * Keeps {local_reactions} consistent with {forum_posts} so counts from
+     * get_reactions() and the peer-grading helpers agree with each other.
+     *
+     * @param \mod_forum\event\post_deleted $event The post_deleted event.
+     */
+    public static function post_deleted(\mod_forum\event\post_deleted $event): void {
+        global $DB;
+        $DB->delete_records('local_reactions', [
+            'component' => manager::COMPONENT_FORUM,
+            'itemtype'  => manager::ITEMTYPE_POST,
+            'itemid'    => $event->objectid,
+        ]);
+    }
+}

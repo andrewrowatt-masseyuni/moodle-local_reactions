@@ -60,7 +60,7 @@ class toggle_reaction extends external_api {
         int $itemid,
         string $emoji
     ): array {
-        global $DB, $USER;
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'component' => $component,
@@ -70,7 +70,7 @@ class toggle_reaction extends external_api {
         ]);
 
         // Only forum posts supported for now.
-        if ($params['component'] !== 'mod_forum' || $params['itemtype'] !== 'post') {
+        if ($params['component'] !== manager::COMPONENT_FORUM || $params['itemtype'] !== manager::ITEMTYPE_POST) {
             throw new \invalid_parameter_exception('Only mod_forum posts are supported');
         }
 
@@ -93,7 +93,7 @@ class toggle_reaction extends external_api {
 
         // Look up per-forum setting to determine if reactions are enabled and if multiple are allowed.
         $cm = get_coursemodule_from_instance('forum', $forum->get_id(), 0, false, MUST_EXIST);
-        $forumconfig = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $forumconfig = manager::get_forum_config($cm->id);
         if (!$forumconfig || !$forumconfig->enabled) {
             throw new \moodle_exception('reactionsnotenabled', 'local_reactions');
         }

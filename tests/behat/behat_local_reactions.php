@@ -158,4 +158,16 @@ class behat_local_reactions extends behat_base {
         $selector = "[data-region=\"reactions-bar\"][data-source=\"{$source}\"]";
         $this->ensure_element_exists($selector, 'css_element');
     }
+
+    /**
+     * Wait for reactions bars to be loaded inside the whole-forum grading panel.
+     *
+     * @Given I wait for grading reactions to load
+     */
+    public function i_wait_for_grading_reactions_to_load(): void {
+        $this->ensure_element_exists(
+            '[data-region="module_content"] [data-region="reactions-bar"]',
+            'css_element'
+        );
+    }
 }

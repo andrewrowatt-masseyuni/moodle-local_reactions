@@ -50,6 +50,7 @@ let pollingInitialised = false;
 export const init = (cfg) => {
     config = cfg;
     loadDiscussionReactions();
+    observeGradingPanel();
 };
 
 /**
@@ -334,6 +335,154 @@ const rerenderBarWithAnimation = async(discussionId, freshData, diffs) => {
     } catch (err) {
         Notification.exception(err);
     }
+};
+
+/**
+ * Insert a read-only reactions bar into a forum post article within the grading panel.
+ *
+ * @param {HTMLElement} article The article[data-post-id] element.
+ * @param {HTMLElement} element The reactions bar element to insert.
+ */
+const insertIntoGradingPost = (article, element) => {
+    const actionsContainer = article.querySelector('[data-region="post-actions-container"]');
+    if (actionsContainer) {
+        actionsContainer.parentElement.insertBefore(element, actionsContainer);
+        return;
+    }
+    const alignContainer = article.querySelector('.content-alignment-container');
+    if (alignContainer) {
+        alignContainer.appendChild(element);
+        return;
+    }
+    const postCore = article.querySelector('[data-region-content="forum-post-core"]');
+    if (postCore) {
+        postCore.appendChild(element);
+    }
+};
+
+/**
+ * Load read-only reactions for posts displayed in the whole-forum grading panel.
+ *
+ * Collects post IDs from articles within the grading content region,
+ * fetches per-post reactions, and renders compact read-only bars.
+ *
+ * @param {HTMLElement} container The grading module_content container.
+ */
+// Flag to suppress the grading MutationObserver while we insert reaction bars,
+// preventing it from re-entering loadGradingReactions for our own DOM changes.
+let gradingInserting = false;
+
+const loadGradingReactions = async(container) => {
+    const articles = container.querySelectorAll('.post-container article[data-post-id]');
+    if (!articles.length) {
+        return;
+    }
+
+    const postIds = [];
+    articles.forEach((article) => {
+        const postId = parseInt(article.getAttribute('data-post-id'));
+        if (postId && !article.querySelector('[data-region="reactions-bar"]')) {
+            postIds.push(postId);
+        }
+    });
+
+    if (!postIds.length) {
+        return;
+    }
+
+    const compactview = config.compactview_grading ?? config.compactview;
+
+    try {
+        const response = await Ajax.call([{
+            methodname: 'local_reactions_get_reactions',
+            args: {
+                component: config.component,
+                itemtype: config.itemtype,
+                itemids: postIds,
+                contextid: config.contextid,
+            },
+        }])[0];
+
+        const reactionsMap = {};
+        response.items.forEach((item) => {
+            reactionsMap[item.itemid] = item;
+        });
+
+        gradingInserting = true;
+        try {
+            for (const postId of postIds) {
+                const article = container.querySelector(`.post-container article[data-post-id="${postId}"]`);
+                if (!article || article.querySelector('[data-region="reactions-bar"]')) {
+                    continue;
+                }
+
+                const data = reactionsMap[postId] || {itemid: postId, counts: [], userreactions: []};
+                const context = buildTemplateContext(data, config.emojis, {
+                    compactview: compactview,
+                    userreactions: config.showselfreactionsgrading ? (data.userreactions || []) : [],
+                });
+
+                const {element: barElement, js} = await renderToElement(
+                    'local_reactions/discussion_list_reactions', context
+                );
+                barElement.setAttribute('data-source', 'live');
+
+                insertIntoGradingPost(article, barElement);
+                Templates.runTemplateJS(js);
+            }
+        } finally {
+            gradingInserting = false;
+        }
+    } catch (err) {
+        Notification.exception(err);
+    }
+};
+
+/**
+ * Observe the DOM for the grading panel to appear and load reactions when posts are inserted.
+ *
+ * The whole-forum grading panel dynamically inserts posts into
+ * [data-region="module_content"]. This observer detects those insertions
+ * and triggers reaction loading for each batch of posts.
+ */
+const observeGradingPanel = () => {
+    const observer = new MutationObserver((mutations) => {
+        if (gradingInserting) {
+            return;
+        }
+        for (const mutation of mutations) {
+            // Handle content replaced inside an existing module_content region.
+            const target = mutation.target.closest?.('[data-region="module_content"]') || mutation.target;
+            if (target.matches?.('[data-region="module_content"]')
+                && target.querySelector('.post-containerarticle[data-post-id]')) {
+                loadGradingReactions(target);
+                return;
+            }
+            // Handle new nodes added that contain posts.
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    continue;
+                }
+                const container = node.closest?.('[data-region="module_content"]')
+                    || node.querySelector?.('[data-region="module_content"]');
+                if (container && container.querySelector('.post-container article[data-post-id]')) {
+                    loadGradingReactions(container);
+                    return;
+                }
+                // The added node itself may be inside the module_content region.
+                if (node.matches?.('.post-container article[data-post-id]')
+                    || node.querySelector?.('.post-container article[data-post-id]')) {
+                    const moduleContent = node.closest?.('[data-region="module_content"]');
+                    if (moduleContent) {
+                        loadGradingReactions(moduleContent);
+                        return;
+                    }
+                }
+            }
+        }
+    });
+
+    observer.observe(document.body, {childList: true, subtree: true});
 };
 
 /**

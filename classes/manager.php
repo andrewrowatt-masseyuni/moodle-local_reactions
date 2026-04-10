@@ -187,6 +187,201 @@ class manager {
     }
 
     /**
+     * Get reaction counts for the given forum posts as displayed in the grading panel.
+     *
+     * When the per-forum "Only show peer reactions when grading" setting is enabled,
+     * reactions made by the post author themselves and reactions made by users who do
+     * not hold a student-archetype role in the course are excluded from the counts and
+     * from the current user's reactions list.
+     *
+     * @param string $component Component name e.g. mod_forum.
+     * @param string $itemtype Item type e.g. post.
+     * @param array $itemids Array of forum post IDs.
+     * @param int $userid Current user ID.
+     * @param \context $context The module context for the forum being graded.
+     * @return array Keyed by itemid, each containing 'counts' and 'userreactions'.
+     */
+    public static function get_reactions_for_grading(
+        string $component,
+        string $itemtype,
+        array $itemids,
+        int $userid,
+        \context $context
+    ): array {
+        if (empty($itemids)) {
+            return [];
+        }
+
+        if (!self::is_only_peer_grading_enabled($context)) {
+            // No filtering: fall back to the standard per-post lookup.
+            return self::get_reactions($component, $itemtype, $itemids, $userid);
+        }
+
+        // Build the set of student userids in this forum's course.
+        $studentuserids = self::get_student_userids($context);
+
+        $result = [];
+        foreach ($itemids as $itemid) {
+            $result[$itemid] = [
+                'counts' => [],
+                'userreactions' => [],
+            ];
+        }
+
+        // Without any students enrolled, all peer-filtered counts are zero.
+        if (empty($studentuserids)) {
+            return $result;
+        }
+
+        self::populate_peer_counts($result, $component, $itemtype, $itemids, $studentuserids);
+        self::populate_peer_user_reactions($result, $component, $itemtype, $itemids, $studentuserids, $userid);
+
+        return $result;
+    }
+
+    /**
+     * Determine whether the per-forum "only show peer reactions when grading" option
+     * is enabled for the forum identified by the given module context.
+     *
+     * @param \context $context Module context for the forum.
+     * @return bool True if peer-only filtering should be applied (defaults to true).
+     */
+    private static function is_only_peer_grading_enabled(\context $context): bool {
+        global $DB;
+        if (!($context instanceof \context_module)) {
+            return true;
+        }
+        $record = $DB->get_record('local_reactions_enabled', ['cmid' => $context->instanceid]);
+        if (!$record || !isset($record->onlypeerreactionsgrading)) {
+            return true;
+        }
+        return !empty($record->onlypeerreactionsgrading);
+    }
+
+    /**
+     * Fill in the per-post emoji counts on $result, restricted to reactions by students
+     * and excluding self-reactions (reactor is post author).
+     *
+     * @param array $result Result array keyed by itemid (modified in-place).
+     * @param string $component Component name.
+     * @param string $itemtype Item type.
+     * @param array $itemids Forum post IDs.
+     * @param int[] $studentuserids List of student user IDs in the course.
+     */
+    private static function populate_peer_counts(
+        array &$result,
+        string $component,
+        string $itemtype,
+        array $itemids,
+        array $studentuserids
+    ): void {
+        global $DB;
+
+        [$itemsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED, 'itemid');
+        [$usersql, $userparams] = $DB->get_in_or_equal($studentuserids, SQL_PARAMS_NAMED, 'student');
+
+        $params = array_merge($itemparams, $userparams, [
+            'component' => $component,
+            'itemtype' => $itemtype,
+        ]);
+
+        $sql = "SELECT CONCAT(r.itemid, '_', r.emoji) AS uid,
+                       r.itemid,
+                       r.emoji,
+                       COUNT(*) AS total
+                  FROM {local_reactions} r
+                  JOIN {forum_posts} fp ON fp.id = r.itemid
+                 WHERE r.component = :component
+                   AND r.itemtype = :itemtype
+                   AND r.itemid $itemsql
+                   AND r.userid $usersql
+                   AND r.userid <> fp.userid
+              GROUP BY r.itemid, r.emoji
+              ORDER BY r.itemid, total DESC";
+
+        $counts = $DB->get_records_sql($sql, $params);
+        foreach ($counts as $row) {
+            $result[$row->itemid]['counts'][$row->emoji] = (int) $row->total;
+        }
+    }
+
+    /**
+     * Fill in the current user's own reactions on $result, restricted to reactions by
+     * students and excluding self-reactions (current user is post author).
+     *
+     * @param array $result Result array keyed by itemid (modified in-place).
+     * @param string $component Component name.
+     * @param string $itemtype Item type.
+     * @param array $itemids Forum post IDs.
+     * @param int[] $studentuserids List of student user IDs in the course.
+     * @param int $userid Current user ID.
+     */
+    private static function populate_peer_user_reactions(
+        array &$result,
+        string $component,
+        string $itemtype,
+        array $itemids,
+        array $studentuserids,
+        int $userid
+    ): void {
+        global $DB;
+
+        // Only students contribute reactions in peer-only mode.
+        if (!in_array((int) $userid, array_map('intval', $studentuserids), true)) {
+            return;
+        }
+
+        [$itemsql, $itemparams] = $DB->get_in_or_equal($itemids, SQL_PARAMS_NAMED, 'itemid');
+        $params = array_merge($itemparams, [
+            'component' => $component,
+            'itemtype' => $itemtype,
+            'userid' => $userid,
+        ]);
+
+        $sql = "SELECT r.id, r.itemid, r.emoji
+                  FROM {local_reactions} r
+                  JOIN {forum_posts} fp ON fp.id = r.itemid
+                 WHERE r.component = :component
+                   AND r.itemtype = :itemtype
+                   AND r.itemid $itemsql
+                   AND r.userid = :userid
+                   AND r.userid <> fp.userid";
+
+        $userreactions = $DB->get_records_sql($sql, $params);
+        foreach ($userreactions as $row) {
+            $result[$row->itemid]['userreactions'][] = $row->emoji;
+        }
+    }
+
+    /**
+     * Get the user IDs of users who have a role with the 'student' archetype
+     * in the course that owns the given context.
+     *
+     * @param \context $context Any context (module or course); the course context is derived.
+     * @return int[] List of student user IDs.
+     */
+    private static function get_student_userids(\context $context): array {
+        $coursecontext = $context->get_course_context(false);
+        if (!$coursecontext) {
+            return [];
+        }
+
+        $studentroles = get_archetype_roles('student');
+        if (empty($studentroles)) {
+            return [];
+        }
+
+        $userids = [];
+        foreach ($studentroles as $role) {
+            $users = get_role_users($role->id, $coursecontext, true, 'u.id', 'u.id');
+            foreach ($users as $u) {
+                $userids[(int) $u->id] = (int) $u->id;
+            }
+        }
+        return array_values($userids);
+    }
+
+    /**
      * Check whether any reactions exist for posts belonging to a given forum.
      *
      * @param int $forumid The forum instance ID (forum.id).

@@ -86,6 +86,8 @@ class local_reactions_generator extends component_generator_base {
         $record->compactview_discuss = $data['compactview_discuss'] ?? 0;
         $record->allowmultiplereactions = isset($data['allowmultiplereactions'])
             ? (int) $data['allowmultiplereactions'] : 1;
+        $record->onlypeerreactionsgrading = isset($data['onlypeerreactionsgrading'])
+            ? (int) $data['onlypeerreactionsgrading'] : 1;
 
         $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
         if ($existing) {

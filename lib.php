@@ -82,6 +82,17 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
     // Default to allowing multiple reactions (can be overridden below if record says otherwise).
     $mform->setDefault('local_reactions_allowmultiplereactions', 1);
 
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_onlypeerreactionsgrading',
+        get_string('onlypeerreactionsgrading', 'local_reactions')
+    );
+    $mform->addHelpButton('local_reactions_onlypeerreactionsgrading', 'onlypeerreactionsgrading', 'local_reactions');
+    $mform->hideIf('local_reactions_onlypeerreactionsgrading', 'local_reactions_enabled');
+
+    // Default to only showing peer reactions when grading (can be overridden below if record says otherwise).
+    $mform->setDefault('local_reactions_onlypeerreactionsgrading', 1);
+
     // Set current values from the database.
     if ($cmid = $cm->coursemodule) {
         $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
@@ -96,6 +107,9 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
         }
         if ($record && isset($record->allowmultiplereactions) && !$record->allowmultiplereactions) {
             $mform->setDefault('local_reactions_allowmultiplereactions', 0);
+        }
+        if ($record && isset($record->onlypeerreactionsgrading) && !$record->onlypeerreactionsgrading) {
+            $mform->setDefault('local_reactions_onlypeerreactionsgrading', 0);
         }
 
         // Lock the checkbox when already in "allow multiple" mode and reactions exist.
@@ -132,6 +146,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     $compactviewlist = !empty($data->local_reactions_compactview_list) ? 1 : 0;
     $compactviewdiscuss = !empty($data->local_reactions_compactview_discuss) ? 1 : 0;
     $allowmultiple = !empty($data->local_reactions_allowmultiplereactions) ? 1 : 0;
+    $onlypeergrading = !empty($data->local_reactions_onlypeerreactionsgrading) ? 1 : 0;
     $cmid = $data->coursemodule;
 
     $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
@@ -149,6 +164,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
         $existing->compactview_list = $compactviewlist;
         $existing->compactview_discuss = $compactviewdiscuss;
         $existing->allowmultiplereactions = $allowmultiple;
+        $existing->onlypeerreactionsgrading = $onlypeergrading;
         $DB->update_record('local_reactions_enabled', $existing);
     } else {
         $DB->insert_record('local_reactions_enabled', (object) [
@@ -157,6 +173,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
             'compactview_list' => $compactviewlist,
             'compactview_discuss' => $compactviewdiscuss,
             'allowmultiplereactions' => $allowmultiple,
+            'onlypeerreactionsgrading' => $onlypeergrading,
         ]);
     }
 

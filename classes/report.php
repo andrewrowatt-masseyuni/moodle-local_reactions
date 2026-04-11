@@ -27,8 +27,11 @@ class report {
     /** @var int Course ID */
     private $courseid;
 
-    /** @var array Forum IDs with reactions enabled */
+    /** @var int[] Forum IDs with reactions enabled */
     private $forumids;
+
+    /** @var array<int,int> Map of forum instance ID => course module ID */
+    private $forumtocmid = [];
 
     /**
      * Constructor.
@@ -43,22 +46,27 @@ class report {
     /**
      * Get all forum IDs in this course that have reactions enabled.
      *
+     * Uses modinfo to iterate forum course modules so soft-deleted modules
+     * (cm.deletioninprogress) are naturally excluded via the course cache,
+     * and delegates the per-forum enable check to the cached config helper.
+     *
      * @return array Array of forum instance IDs
      */
     private function get_enabled_forums(): array {
-        global $DB;
-
-        $sql = "SELECT f.id
-                  FROM {forum} f
-                  JOIN {course_modules} cm ON cm.instance = f.id
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {local_reactions_enabled} re ON re.cmid = cm.id
-                 WHERE f.course = :courseid
-                   AND m.name = 'forum'
-                   AND re.enabled = 1";
-
-        $records = $DB->get_records_sql($sql, ['courseid' => $this->courseid]);
-        return array_keys($records);
+        $modinfo = get_fast_modinfo($this->courseid);
+        $forumids = [];
+        foreach ($modinfo->get_instances_of('forum') as $cm) {
+            if (!empty($cm->deletioninprogress)) {
+                continue;
+            }
+            $config = manager::get_forum_config($cm->id);
+            if ($config && !empty($config->enabled)) {
+                $forumid = (int) $cm->instance;
+                $forumids[] = $forumid;
+                $this->forumtocmid[$forumid] = (int) $cm->id;
+            }
+        }
+        return $forumids;
     }
 
     /**
@@ -75,8 +83,8 @@ class report {
 
         [$insql, $params] = $DB->get_in_or_equal($this->forumids, SQL_PARAMS_NAMED);
 
-        // Get total posts.
-        $sql = "SELECT COUNT(DISTINCT p.id) as total
+        // Get total posts (p.id is the PK so DISTINCT is redundant).
+        $sql = "SELECT COUNT(p.id) as total
                   FROM {forum_posts} p
                   JOIN {forum_discussions} d ON d.id = p.discussion
                  WHERE d.forum $insql";
@@ -84,12 +92,14 @@ class report {
         $totalposts = $DB->count_records_sql($sql, $params);
 
         // Get total reactions.
+        $params['component'] = manager::COMPONENT_FORUM;
+        $params['itemtype'] = manager::ITEMTYPE_POST;
         $sql = "SELECT COUNT(*) as total
                   FROM {local_reactions} r
                   JOIN {forum_posts} p ON p.id = r.itemid
                   JOIN {forum_discussions} d ON d.id = p.discussion
-                 WHERE r.component = 'mod_forum'
-                   AND r.itemtype = 'post'
+                 WHERE r.component = :component
+                   AND r.itemtype = :itemtype
                    AND d.forum $insql";
 
         $totalreactions = $DB->count_records_sql($sql, $params);
@@ -116,14 +126,16 @@ class report {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($this->forumids, SQL_PARAMS_NAMED);
+        $params['component'] = manager::COMPONENT_FORUM;
+        $params['itemtype'] = manager::ITEMTYPE_POST;
 
         // Get active reactors.
         $sql = "SELECT COUNT(DISTINCT r.userid) as total
                   FROM {local_reactions} r
                   JOIN {forum_posts} p ON p.id = r.itemid
                   JOIN {forum_discussions} d ON d.id = p.discussion
-                 WHERE r.component = 'mod_forum'
-                   AND r.itemtype = 'post'
+                 WHERE r.component = :component
+                   AND r.itemtype = :itemtype
                    AND d.forum $insql";
 
         $activereactors = $DB->count_records_sql($sql, $params);
@@ -156,27 +168,34 @@ class report {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($this->forumids, SQL_PARAMS_NAMED);
+        $params['component'] = manager::COMPONENT_FORUM;
+        $params['itemtype'] = manager::ITEMTYPE_POST;
 
-        $sql = "SELECT p.id, p.subject, p.message, p.created, p.userid,
+        // Forumids is already scoped to forum instance IDs (via modinfo),
+        // so we don't need to join {course_modules} + {modules} just to verify the
+        // module type or look up cmid - that mapping already lives in $forumtocmid.
+        // Skip the TEXT column p.message as it is never rendered in the report.
+        $sql = "SELECT p.id, p.subject, p.created, p.userid,
                        d.id as discussionid, d.name as discussionname,
-                       f.id as forumid, f.name as forumname,
-                       cm.id as cmid
+                       f.id as forumid, f.name as forumname
                   FROM {forum_posts} p
                   JOIN {forum_discussions} d ON d.id = p.discussion
                   JOIN {forum} f ON f.id = d.forum
-                  JOIN {modules} m ON m.name = 'forum'
-                  JOIN {course_modules} cm ON cm.instance = f.id AND cm.module = m.id
                  WHERE d.forum $insql
                    AND NOT EXISTS (
                        SELECT 1
                          FROM {local_reactions} r
-                        WHERE r.component = 'mod_forum'
-                          AND r.itemtype = 'post'
+                        WHERE r.component = :component
+                          AND r.itemtype = :itemtype
                           AND r.itemid = p.id
                    )
               ORDER BY p.created DESC";
 
-        return array_values($DB->get_records_sql($sql, $params, 0, $limit));
+        $records = $DB->get_records_sql($sql, $params, 0, $limit);
+        foreach ($records as $record) {
+            $record->cmid = $this->forumtocmid[(int) $record->forumid] ?? null;
+        }
+        return array_values($records);
     }
 
     /**
@@ -193,30 +212,33 @@ class report {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($this->forumids, SQL_PARAMS_NAMED);
+        $params['component'] = manager::COMPONENT_FORUM;
+        $params['itemtype'] = manager::ITEMTYPE_POST;
+        $params['weekago'] = time() - (7 * 24 * 60 * 60);
 
-        // Get timestamp for one week ago.
-        $weekago = time() - (7 * 24 * 60 * 60);
-        $params['weekago'] = $weekago;
-
-        $sql = "SELECT p.id, p.subject, p.message, p.created, p.userid,
+        // As above: $this->forumids pre-scopes to forum instances, so {course_modules}
+        // and {modules} joins are unnecessary - cmid is resolved via $forumtocmid.
+        // Drops the TEXT column p.message which was never displayed.
+        $sql = "SELECT p.id, p.subject, p.created, p.userid,
                        d.id as discussionid, d.name as discussionname,
                        f.id as forumid, f.name as forumname,
-                       cm.id as cmid,
                        COUNT(r.id) as reactioncount
                   FROM {forum_posts} p
                   JOIN {forum_discussions} d ON d.id = p.discussion
                   JOIN {forum} f ON f.id = d.forum
-                  JOIN {modules} m ON m.name = 'forum'
-                  JOIN {course_modules} cm ON cm.instance = f.id AND cm.module = m.id
                   JOIN {local_reactions} r ON r.itemid = p.id
-                                           AND r.component = 'mod_forum'
-                                           AND r.itemtype = 'post'
+                                           AND r.component = :component
+                                           AND r.itemtype = :itemtype
                  WHERE d.forum $insql
                    AND r.timecreated >= :weekago
-              GROUP BY p.id, p.subject, p.message, p.created, p.userid,
-                       d.id, d.name, f.id, f.name, cm.id
+              GROUP BY p.id, p.subject, p.created, p.userid,
+                       d.id, d.name, f.id, f.name
               ORDER BY reactioncount DESC, p.created DESC";
 
-        return array_values($DB->get_records_sql($sql, $params, 0, $limit));
+        $records = $DB->get_records_sql($sql, $params, 0, $limit);
+        foreach ($records as $record) {
+            $record->cmid = $this->forumtocmid[(int) $record->forumid] ?? null;
+        }
+        return array_values($records);
     }
 }

@@ -30,7 +30,7 @@ class before_footer_html_generation {
      * @param \core\hook\output\before_footer_html_generation $hook
      */
     public static function callback(\core\hook\output\before_footer_html_generation $hook): void {
-        global $PAGE, $DB;
+        global $PAGE;
 
         if (!get_config('local_reactions', 'enabled')) {
             return;
@@ -47,7 +47,7 @@ class before_footer_html_generation {
         if (!$cm) {
             return;
         }
-        $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cm->id]);
+        $record = \local_reactions\manager::get_forum_config($cm->id);
         if (!$record || !$record->enabled) {
             return;
         }
@@ -68,8 +68,8 @@ class before_footer_html_generation {
             $PAGE->requires->js_call_amd('local_reactions/reactions', 'init', [
                 [
                     'contextid' => $context->id,
-                    'component' => 'mod_forum',
-                    'itemtype' => 'post',
+                    'component' => \local_reactions\manager::COMPONENT_FORUM,
+                    'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
                     'canreact' => $canreact,
                     'emojis' => $emojiset,
                     'compactview' => !empty($record->compactview_discuss),
@@ -81,8 +81,8 @@ class before_footer_html_generation {
             $PAGE->requires->js_call_amd('local_reactions/discussion_list_reactions', 'init', [
                 [
                     'contextid' => $context->id,
-                    'component' => 'mod_forum',
-                    'itemtype' => 'post',
+                    'component' => \local_reactions\manager::COMPONENT_FORUM,
+                    'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
                     'emojis' => $emojiset,
                     'compactview' => !empty($record->compactview_list),
                     'pollinterval' => $pollinterval,

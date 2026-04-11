@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.1
+- Reactions are now visible on the forum grading screen. Self and teacher reactions are excluded by default.
+
+## v1.6.0
+- Internal testing version only. Never released.
+
+## v1.5.0
+- Internal testing version only. Never released.
+
 ## v1.4.0
 - Added option for a single reaction per post per user. Thanks to Sokunthearith "T" Makara for the suggestion.
 

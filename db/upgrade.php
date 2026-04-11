@@ -50,5 +50,23 @@ function xmldb_local_reactions_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026022501, 'local', 'reactions');
     }
 
+    if ($oldversion < 2026041100) {
+        // Add onlypeerreactionsgrading column to local_reactions_enabled.
+        $table = new xmldb_table('local_reactions_enabled');
+        $field = new xmldb_field(
+            'onlypeerreactionsgrading',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '1'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2026041100, 'local', 'reactions');
+    }
+
     return true;
 }

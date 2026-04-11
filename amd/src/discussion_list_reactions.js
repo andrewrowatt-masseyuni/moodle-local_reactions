@@ -394,7 +394,7 @@ const loadGradingReactions = async(container) => {
 
     try {
         const response = await Ajax.call([{
-            methodname: 'local_reactions_get_reactions',
+            methodname: 'local_reactions_get_reactions_for_grading',
             args: {
                 component: config.component,
                 itemtype: config.itemtype,

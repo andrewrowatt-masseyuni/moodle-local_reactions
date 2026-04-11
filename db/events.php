@@ -15,34 +15,18 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Reactions report page.
+ * Event observer registration for local_reactions.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__ . '/../../config.php');
-require_once($CFG->libdir . '/adminlib.php');
+defined('MOODLE_INTERNAL') || die();
 
-$courseid = required_param('id', PARAM_INT);
-
-$course = $DB->get_record('course', ['id' => $courseid], '*', MUST_EXIST);
-$context = context_course::instance($courseid);
-
-require_login($course);
-require_capability('local/reactions:viewreport', $context);
-
-$PAGE->set_url('/local/reactions/report.php', ['id' => $courseid]);
-$PAGE->set_context($context);
-$PAGE->set_title(get_string('reactionsreport', 'local_reactions'));
-$PAGE->set_heading($course->fullname);
-$PAGE->set_pagelayout('report');
-
-$report = new \local_reactions\report($courseid);
-/** @var \local_reactions\output\renderer $renderer */
-$renderer = $PAGE->get_renderer('local_reactions');
-
-echo $OUTPUT->header();
-echo $renderer->render_report($report);
-echo $OUTPUT->footer();
+$observers = [
+    [
+        'eventname' => '\mod_forum\event\post_deleted',
+        'callback'  => '\local_reactions\observer::post_deleted',
+    ],
+];

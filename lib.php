@@ -29,8 +29,6 @@
  * @param MoodleQuickForm $mform The form object.
  */
 function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
-    global $DB;
-
     if (!get_config('local_reactions', 'enabled')) {
         return;
     }
@@ -79,32 +77,40 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
     $mform->addHelpButton('local_reactions_allowmultiplereactions', 'allowmultiplereactions', 'local_reactions');
     $mform->hideIf('local_reactions_allowmultiplereactions', 'local_reactions_enabled');
 
-    // Default to allowing multiple reactions (can be overridden below if record says otherwise).
-    $mform->setDefault('local_reactions_allowmultiplereactions', 1);
+    $mform->addElement(
+        'checkbox',
+        'local_reactions_onlypeerreactionsgrading',
+        get_string('onlypeerreactionsgrading', 'local_reactions')
+    );
+    $mform->addHelpButton('local_reactions_onlypeerreactionsgrading', 'onlypeerreactionsgrading', 'local_reactions');
+    $mform->hideIf('local_reactions_onlypeerreactionsgrading', 'local_reactions_enabled');
 
-    // Set current values from the database.
-    if ($cmid = $cm->coursemodule) {
-        $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
-        if ($record && $record->enabled) {
-            $mform->setDefault('local_reactions_enabled', 1);
+    // Populate defaults: either mirror the stored record, or fall back to the
+    // "new forum" default (off for display toggles, on for multi/peer grading).
+    // Map: form field => [db field on local_reactions_enabled, new-forum default].
+    $fieldmap = [
+        'local_reactions_enabled'                  => ['enabled', 0],
+        'local_reactions_compactview_list'         => ['compactview_list', 0],
+        'local_reactions_compactview_discuss'      => ['compactview_discuss', 0],
+        'local_reactions_allowmultiplereactions'   => ['allowmultiplereactions', 1],
+        'local_reactions_onlypeerreactionsgrading' => ['onlypeerreactionsgrading', 1],
+    ];
+    $cmid = (int) ($cm->coursemodule ?? 0);
+    $record = $cmid ? \local_reactions\manager::get_forum_config($cmid) : null;
+    foreach ($fieldmap as $formfield => [$dbfield, $newdefault]) {
+        if ($record && isset($record->$dbfield)) {
+            $mform->setDefault($formfield, !empty($record->$dbfield) ? 1 : 0);
+        } else {
+            $mform->setDefault($formfield, $newdefault);
         }
-        if ($record && !empty($record->compactview_list)) {
-            $mform->setDefault('local_reactions_compactview_list', 1);
-        }
-        if ($record && !empty($record->compactview_discuss)) {
-            $mform->setDefault('local_reactions_compactview_discuss', 1);
-        }
-        if ($record && isset($record->allowmultiplereactions) && !$record->allowmultiplereactions) {
-            $mform->setDefault('local_reactions_allowmultiplereactions', 0);
-        }
+    }
 
-        // Lock the checkbox when already in "allow multiple" mode and reactions exist.
-        // Once reactions are present you cannot downgrade to single-reaction mode.
+    // Lock the "allow multiple" checkbox when the forum is already in multi-reaction
+    // mode and reactions exist. Once reactions are present you cannot downgrade.
+    if ($cmid) {
         $ismultiplereactionsenabled = !$record || !empty($record->allowmultiplereactions);
-        if ($ismultiplereactionsenabled) {
-            if (\local_reactions\manager::forum_has_reactions($cm->instance)) {
-                $mform->hardFreeze('local_reactions_allowmultiplereactions');
-            }
+        if ($ismultiplereactionsenabled && \local_reactions\manager::forum_has_reactions($cm->instance)) {
+            $mform->hardFreeze('local_reactions_allowmultiplereactions');
         }
     }
 }
@@ -132,14 +138,17 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     $compactviewlist = !empty($data->local_reactions_compactview_list) ? 1 : 0;
     $compactviewdiscuss = !empty($data->local_reactions_compactview_discuss) ? 1 : 0;
     $allowmultiple = !empty($data->local_reactions_allowmultiplereactions) ? 1 : 0;
-    $cmid = $data->coursemodule;
+    $onlypeergrading = !empty($data->local_reactions_onlypeerreactionsgrading) ? 1 : 0;
+    $cmid = (int) $data->coursemodule;
 
     $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
 
     // Server-side safety: prevent switching multiple→single when reactions already exist.
+    // $data->instance is the forum instance ID populated by the module form handler,
+    // so we don't need a $DB->get_field round-trip to course_modules.
     if ($existing && !empty($existing->allowmultiplereactions) && !$allowmultiple) {
-        $forumid = $DB->get_field('course_modules', 'instance', ['id' => $cmid]);
-        if (\local_reactions\manager::forum_has_reactions($forumid)) {
+        $forumid = (int) ($data->instance ?? 0);
+        if ($forumid && \local_reactions\manager::forum_has_reactions($forumid)) {
             $allowmultiple = 1;
         }
     }
@@ -149,6 +158,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
         $existing->compactview_list = $compactviewlist;
         $existing->compactview_discuss = $compactviewdiscuss;
         $existing->allowmultiplereactions = $allowmultiple;
+        $existing->onlypeerreactionsgrading = $onlypeergrading;
         $DB->update_record('local_reactions_enabled', $existing);
     } else {
         $DB->insert_record('local_reactions_enabled', (object) [
@@ -157,8 +167,12 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
             'compactview_list' => $compactviewlist,
             'compactview_discuss' => $compactviewdiscuss,
             'allowmultiplereactions' => $allowmultiple,
+            'onlypeerreactionsgrading' => $onlypeergrading,
         ]);
     }
+
+    // Keep the per-request cache consistent with what we just wrote.
+    \local_reactions\manager::clear_forum_config_cache($cmid);
 
     return $data;
 }

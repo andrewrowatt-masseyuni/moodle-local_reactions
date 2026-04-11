@@ -48,3 +48,24 @@ Feature: Reactions on the forum grading page
     And I wait for grading reactions to load
     Then "[data-region='reactions-bar']" "css_element" should exist
     And "[data-emoji='thumbsup']" "css_element" should exist
+
+  Scenario: Only peer reactions are shown when grading by default
+    # On Student One Post: thumbsup from teacher1 (excluded) + thumbsup from student2 (peer) = 1
+    # heart from student1 is the post author so it is excluded.
+    Given I am on the "Graded Forum" "forum activity" page logged in as teacher1
+    And I press "Grade users"
+    And I wait for grading reactions to load
+    Then "[data-region='module_content'] [data-emoji='thumbsup'][data-count='1']" "css_element" should exist
+    And "[data-region='module_content'] [data-emoji='heart']" "css_element" should not exist
+
+  Scenario: Disabling the peer-only grading option shows all reactions in the grading panel
+    Given the following "local_reactions > enabled forums" exist:
+      | forum        | course | enabled | compactview_list | compactview_discuss | onlypeerreactionsgrading |
+      | Graded Forum | C1     | 1       | 0                | 0                   | 0                        |
+    And I am on the "Graded Forum" "forum activity" page logged in as teacher1
+    And I press "Grade users"
+    And I wait for grading reactions to load
+    # Now thumbsup includes both teacher1 and student2 = 2
+    Then "[data-region='module_content'] [data-emoji='thumbsup'][data-count='2']" "css_element" should exist
+    # And the post author's own heart reaction is now visible.
+    And "[data-region='module_content'] [data-emoji='heart']" "css_element" should exist

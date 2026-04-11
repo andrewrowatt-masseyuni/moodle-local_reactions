@@ -83,8 +83,8 @@ class provider implements
 
         $params = [
             'contextlevel' => CONTEXT_MODULE,
-            'component' => 'mod_forum',
-            'itemtype' => 'post',
+            'component' => \local_reactions\manager::COMPONENT_FORUM,
+            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
             'userid' => $userid,
             'modulename' => 'forum',
         ];
@@ -119,8 +119,8 @@ class provider implements
 
         $params = [
             'cmid' => $context->instanceid,
-            'component' => 'mod_forum',
-            'itemtype' => 'post',
+            'component' => \local_reactions\manager::COMPONENT_FORUM,
+            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
             'modulename' => 'forum',
         ];
 
@@ -215,8 +215,8 @@ class provider implements
 
         $params = [
             'cmid' => $context->instanceid,
-            'component' => 'mod_forum',
-            'itemtype' => 'post',
+            'component' => \local_reactions\manager::COMPONENT_FORUM,
+            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
             'modulename' => 'forum',
         ];
 
@@ -314,8 +314,8 @@ class provider implements
 
         $params = array_merge([
             'cmid' => $context->instanceid,
-            'component' => 'mod_forum',
-            'itemtype' => 'post',
+            'component' => \local_reactions\manager::COMPONENT_FORUM,
+            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
             'modulename' => 'forum',
         ], $userparams);
 

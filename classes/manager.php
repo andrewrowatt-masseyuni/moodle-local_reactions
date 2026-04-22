@@ -33,6 +33,12 @@ class manager {
     /** @var string Canonical item type for forum post reactions. */
     public const ITEMTYPE_POST = 'post';
 
+    /** @var string Canonical component name for blog entry reactions. */
+    public const COMPONENT_BLOG = 'core_blog';
+
+    /** @var string Canonical item type for blog entry reactions. */
+    public const ITEMTYPE_ENTRY = 'entry';
+
     /** @var array<string,string>|null Per-request cache of the parsed emoji set. */
     private static ?array $emojisetcache = null;
 

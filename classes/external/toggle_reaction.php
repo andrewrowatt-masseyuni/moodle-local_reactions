@@ -22,6 +22,7 @@ use core_external\external_single_structure;
 use core_external\external_multiple_structure;
 use core_external\external_value;
 use local_reactions\manager;
+use local_reactions\provider_registry;
 
 /**
  * External function to toggle an emoji reaction.
@@ -69,35 +70,27 @@ class toggle_reaction extends external_api {
             'emoji' => $emoji,
         ]);
 
-        // Only forum posts supported for now.
-        if ($params['component'] !== manager::COMPONENT_FORUM || $params['itemtype'] !== manager::ITEMTYPE_POST) {
-            throw new \invalid_parameter_exception('Only mod_forum posts are supported');
+        // Dispatch to the provider that owns this (component, itemtype) pair.
+        $provider = provider_registry::get_for_component_itemtype($params['component'], $params['itemtype']);
+        if (!$provider) {
+            throw new \invalid_parameter_exception(
+                'Unsupported component/itemtype: ' . $params['component'] . '/' . $params['itemtype']
+            );
         }
 
-        // Get the forum post and validate context.
-        $vaultfactory = \mod_forum\local\container::get_vault_factory();
-        $postvault = $vaultfactory->get_post_vault();
-        $post = $postvault->get_from_id($params['itemid']);
-        if (!$post) {
-            throw new \invalid_parameter_exception('Post not found');
+        $context = $provider->get_context_for_item($params['itemid']);
+        if (!$context) {
+            throw new \invalid_parameter_exception('Item not found');
         }
-
-        $discussionvault = $vaultfactory->get_discussion_vault();
-        $discussion = $discussionvault->get_from_id($post->get_discussion_id());
-        $forumvault = $vaultfactory->get_forum_vault();
-        $forum = $forumvault->get_from_id($discussion->get_forum_id());
-        $context = $forum->get_context();
 
         self::validate_context($context);
-        require_capability('local/reactions:react', $context);
+        $provider->require_react_capability($context);
 
-        // Look up per-forum setting to determine if reactions are enabled and if multiple are allowed.
-        $cm = get_coursemodule_from_instance('forum', $forum->get_id(), 0, false, MUST_EXIST);
-        $forumconfig = manager::get_forum_config($cm->id);
-        if (!$forumconfig || !$forumconfig->enabled) {
+        $settings = $provider->get_runtime_settings_for_item($params['itemid']);
+        if (!$settings || empty($settings->enabled)) {
             throw new \moodle_exception('reactionsnotenabled', 'local_reactions');
         }
-        $allowmultiple = (bool) $forumconfig->allowmultiplereactions;
+        $allowmultiple = (bool) $settings->allowmultiple;
 
         $result = manager::toggle_reaction(
             $params['component'],

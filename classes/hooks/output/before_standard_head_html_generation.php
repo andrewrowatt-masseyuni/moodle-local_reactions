@@ -16,12 +16,14 @@
 
 namespace local_reactions\hooks\output;
 
+use local_reactions\provider_registry;
+
 /**
  * Hook callback to inject space-reserving CSS for the reactions bar.
  *
- * Injects an inline style into the page head that uses ::after pseudo-elements
- * to reserve vertical space for the reactions bar before JavaScript loads.
- * The JS module removes this style once it inserts its own skeleton loaders.
+ * Injects an inline style into the page head that uses pseudo-elements to reserve vertical space
+ * for the reactions bar before JavaScript loads. The JS module removes this style once it inserts
+ * its own skeleton loaders.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
@@ -29,70 +31,27 @@ namespace local_reactions\hooks\output;
  */
 class before_standard_head_html_generation {
     /**
-     * Inject space-reserving CSS on forum pages.
-     * This is only added if the plugin is enabled, reactions are enabled for the current forum.
-     * Users without the view capability will not have the CSS injected, to avoid reserving space unnecessarily.
+     * Inject space-reserving CSS on any page a registered provider claims.
      *
      * @param \core\hook\output\before_standard_head_html_generation $hook
      */
     public static function callback(\core\hook\output\before_standard_head_html_generation $hook): void {
         global $PAGE;
 
-        if (!get_config('local_reactions', 'enabled')) {
-            return;
+        $cssfragments = [];
+        foreach (provider_registry::get_all() as $provider) {
+            $decision = $provider->resolve_for_page($PAGE);
+            if ($decision === null) {
+                continue;
+            }
+            $css = $provider->render_skeleton_css($decision);
+            if ($css !== null && $css !== '') {
+                $cssfragments[] = $css;
+            }
         }
 
-        $pagetype = $PAGE->pagetype;
-        if (!in_array($pagetype, ['mod-forum-view', 'mod-forum-discuss', 'mod-forum-post'])) {
-            return;
+        if (!empty($cssfragments)) {
+            $hook->add_html('<style id="local-reactions-reserve">' . implode('', $cssfragments) . '</style>');
         }
-
-        $cm = $PAGE->cm;
-        if (!$cm) {
-            return;
-        }
-        $record = \local_reactions\manager::get_forum_config($cm->id);
-        if (!$record || !$record->enabled) {
-            return;
-        }
-
-        $context = $PAGE->context;
-        if (!has_capability('local/reactions:view', $context)) {
-            return;
-        }
-
-        // Each page type has a different CSS selector and skeleton dimensions.
-        // All branches reuse the local-reactions-shimmer keyframes from styles.css.
-        $skeletons = [
-            'mod-forum-post' => [
-                'compact' => $record->compactview_discuss,
-                'selector' => '.content-alignment-container::after',
-                'extra' => 'display:block;height:28px;margin-top:8px;',
-            ],
-            'mod-forum-view' => [
-                'compact' => $record->compactview_list,
-                'selector' => '[data-region="discussion-list-item"] th.topic .p-3::after',
-                'extra' => 'display:block;height:28px;margin-top:0px;',
-            ],
-            'mod-forum-discuss' => [
-                'compact' => $record->compactview_discuss,
-                'selector' => 'article[data-post-id] .d-flex.flex-wrap:has(>[data-region="post-actions-container"])::before',
-                'extra' => 'height:26px;margin:calc(0.5rem + 2px) 0 4px 0;',
-            ],
-        ];
-        $s = $skeletons[$pagetype];
-        $width = !empty($s['compact']) ? '80px' : '52px';
-
-        $css = $s['selector'] . '{'
-            . 'content:\'\';'
-            . $s['extra']
-            . "width:{$width};"
-            . 'border-radius:16px;'
-            . 'background:linear-gradient(90deg,#e8e8e8 25%,#f0f0f0 50%,#e8e8e8 75%);'
-            . 'background-size:200% 100%;'
-            . 'animation:local-reactions-shimmer 1.5s ease-in-out infinite;'
-            . '}';
-
-        $hook->add_html('<style id="local-reactions-reserve">' . $css . '</style>');
     }
 }

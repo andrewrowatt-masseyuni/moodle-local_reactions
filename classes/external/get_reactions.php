@@ -22,6 +22,7 @@ use core_external\external_single_structure;
 use core_external\external_multiple_structure;
 use core_external\external_value;
 use local_reactions\manager;
+use local_reactions\provider_registry;
 
 /**
  * External function to get reactions for multiple items.
@@ -73,7 +74,16 @@ class get_reactions extends external_api {
 
         $context = \context::instance_by_id($params['contextid']);
         self::validate_context($context);
-        require_capability('local/reactions:view', $context);
+
+        // Dispatch view-capability check to the provider so blog (system context) uses moodle/blog:view
+        // while forum (module context) uses local/reactions:view.
+        $provider = provider_registry::get_for_component_itemtype($params['component'], $params['itemtype']);
+        if (!$provider) {
+            throw new \invalid_parameter_exception(
+                'Unsupported component/itemtype: ' . $params['component'] . '/' . $params['itemtype']
+            );
+        }
+        $provider->require_view_capability($context);
 
         $reactions = manager::get_reactions(
             $params['component'],

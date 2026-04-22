@@ -170,4 +170,32 @@ class behat_local_reactions extends behat_base {
             'css_element'
         );
     }
+
+    /**
+     * Navigate directly to a specific blog entry page by subject.
+     *
+     * @Given I am on the blog entry page for :subject
+     * @param string $subject The subject of the blog entry.
+     */
+    public function i_am_on_the_blog_entry_page_for(string $subject): void {
+        global $DB;
+        $entryid = $DB->get_field(
+            'post',
+            'id',
+            ['subject' => $subject, 'module' => 'blog'],
+            MUST_EXIST
+        );
+        $url = new moodle_url('/blog/index.php', ['entryid' => $entryid]);
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+    }
+
+    /**
+     * Navigate to the site-wide blog listing page.
+     *
+     * @Given I am on the blog listing page
+     */
+    public function i_am_on_the_blog_listing_page(): void {
+        $url = new moodle_url('/blog/index.php');
+        $this->getSession()->visit($this->locate_path($url->out_as_local_url(false)));
+    }
 }

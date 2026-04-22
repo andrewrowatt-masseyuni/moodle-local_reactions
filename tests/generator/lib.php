@@ -29,16 +29,42 @@ class local_reactions_generator extends component_generator_base {
     /**
      * Create a reaction record.
      *
-     * @param array $data Must contain userid, emoji, and either itemid or post (subject).
+     * Supports three ways of identifying the item being reacted to:
+     *   - explicit 'itemid' (plus matching 'component' / 'itemtype')
+     *   - 'post' (forum post subject) — resolves to {forum_posts} and defaults
+     *     component/itemtype to mod_forum/post.
+     *   - 'blogentry' (blog entry subject) — resolves to {post} with module='blog'
+     *     and defaults component/itemtype to core_blog/entry.
+     *
+     * @param array $data Must contain userid, emoji, and one of the above identifiers.
      * @return stdClass The created record.
      */
     public function create_reaction(array $data): stdClass {
         global $DB;
 
-        // Look up post by subject if 'post' field is given.
+        if (!isset($data['itemid']) && !isset($data['post']) && !isset($data['blogentry'])) {
+            throw new coding_exception(
+                'create_reaction requires one of: itemid, post (forum post subject), blogentry (blog entry subject)'
+            );
+        }
+
         if (isset($data['post'])) {
+            // Forum post lookup — subjects are unique in test scenarios.
             $data['itemid'] = $DB->get_field('forum_posts', 'id', ['subject' => $data['post']], MUST_EXIST);
+            $data['component'] = $data['component'] ?? 'mod_forum';
+            $data['itemtype'] = $data['itemtype'] ?? 'post';
             unset($data['post']);
+        } else if (isset($data['blogentry'])) {
+            // Blog entry lookup — {post} rows with module='blog'.
+            $data['itemid'] = $DB->get_field(
+                'post',
+                'id',
+                ['subject' => $data['blogentry'], 'module' => 'blog'],
+                MUST_EXIST
+            );
+            $data['component'] = $data['component'] ?? 'core_blog';
+            $data['itemtype'] = $data['itemtype'] ?? 'entry';
+            unset($data['blogentry']);
         }
 
         $record = new stdClass();

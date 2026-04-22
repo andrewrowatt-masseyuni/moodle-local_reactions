@@ -151,17 +151,24 @@ class forum_provider implements content_provider {
 
     #[\Override]
     public function get_context_for_item(int $itemid): ?\context {
+        $forum = $this->resolve_forum_from_post($itemid);
+        return $forum ? $forum->get_context() : null;
+    }
+
+    /**
+     * Resolve the forum entity that owns a given post ID via the forum vaults.
+     *
+     * @param int $postid
+     * @return \mod_forum\local\entities\forum|null
+     */
+    private function resolve_forum_from_post(int $postid) {
         $vaultfactory = \mod_forum\local\container::get_vault_factory();
-        $postvault = $vaultfactory->get_post_vault();
-        $post = $postvault->get_from_id($itemid);
+        $post = $vaultfactory->get_post_vault()->get_from_id($postid);
         if (!$post) {
             return null;
         }
-        $discussionvault = $vaultfactory->get_discussion_vault();
-        $discussion = $discussionvault->get_from_id($post->get_discussion_id());
-        $forumvault = $vaultfactory->get_forum_vault();
-        $forum = $forumvault->get_from_id($discussion->get_forum_id());
-        return $forum->get_context();
+        $discussion = $vaultfactory->get_discussion_vault()->get_from_id($post->get_discussion_id());
+        return $vaultfactory->get_forum_vault()->get_from_id($discussion->get_forum_id());
     }
 
     #[\Override]
@@ -179,16 +186,10 @@ class forum_provider implements content_provider {
         if (!$this->is_globally_enabled()) {
             return null;
         }
-        $vaultfactory = \mod_forum\local\container::get_vault_factory();
-        $postvault = $vaultfactory->get_post_vault();
-        $post = $postvault->get_from_id($itemid);
-        if (!$post) {
+        $forum = $this->resolve_forum_from_post($itemid);
+        if (!$forum) {
             return null;
         }
-        $discussionvault = $vaultfactory->get_discussion_vault();
-        $discussion = $discussionvault->get_from_id($post->get_discussion_id());
-        $forumvault = $vaultfactory->get_forum_vault();
-        $forum = $forumvault->get_from_id($discussion->get_forum_id());
         $cm = get_coursemodule_from_instance('forum', $forum->get_id(), 0, false, MUST_EXIST);
         $config = manager::get_forum_config($cm->id);
         if (!$config || !$config->enabled) {
@@ -225,24 +226,21 @@ class forum_provider implements content_provider {
 
     #[\Override]
     public function get_privacy_users_sql(\context $context): ?array {
-        if (!$context instanceof \context_module) {
+        $forumid = $this->resolve_forum_id_from_module_context($context);
+        if ($forumid === null) {
             return null;
         }
         $sql = "SELECT lr.userid AS userid
-                  FROM {course_modules} cm
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
+                  FROM {forum_discussions} fd
                   JOIN {forum_posts} fp ON fp.discussion = fd.id
                   JOIN {local_reactions} lr ON lr.component = :component
                                            AND lr.itemtype = :itemtype
                                            AND lr.itemid = fp.id
-                 WHERE cm.id = :cmid
-                   AND m.name = :modulename";
+                 WHERE fd.forum = :forumid";
         $params = [
-            'cmid' => $context->instanceid,
+            'forumid' => $forumid,
             'component' => $this->get_component(),
             'itemtype' => $this->get_itemtype(),
-            'modulename' => 'forum',
         ];
         return [$sql, $params];
     }
@@ -250,14 +248,14 @@ class forum_provider implements content_provider {
     #[\Override]
     public function get_privacy_reaction_ids_sql(\context $context, ?int $userid, ?array $userids): ?array {
         global $DB;
-        if (!$context instanceof \context_module) {
+        $forumid = $this->resolve_forum_id_from_module_context($context);
+        if ($forumid === null) {
             return null;
         }
         $params = [
-            'cmid' => $context->instanceid,
+            'forumid' => $forumid,
             'component' => $this->get_component(),
             'itemtype' => $this->get_itemtype(),
-            'modulename' => 'forum',
         ];
         $where = '';
         if ($userid !== null) {
@@ -269,17 +267,32 @@ class forum_provider implements content_provider {
             $where = " AND lr.userid $insql";
         }
         $sql = "SELECT lr.id
-                  FROM {course_modules} cm
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
+                  FROM {forum_discussions} fd
                   JOIN {forum_posts} fp ON fp.discussion = fd.id
                   JOIN {local_reactions} lr ON lr.component = :component
                                            AND lr.itemtype = :itemtype
                                            AND lr.itemid = fp.id
-                 WHERE cm.id = :cmid
-                   AND m.name = :modulename"
+                 WHERE fd.forum = :forumid"
                 . $where;
         return [$sql, $params];
+    }
+
+    /**
+     * Return the forum instance ID for a CONTEXT_MODULE context that belongs to a forum,
+     * or null if the context is not a forum module context.
+     *
+     * @param \context $context
+     * @return int|null
+     */
+    private function resolve_forum_id_from_module_context(\context $context): ?int {
+        if (!$context instanceof \context_module) {
+            return null;
+        }
+        $cm = get_coursemodule_from_id('forum', $context->instanceid, 0, false, IGNORE_MISSING);
+        if (!$cm) {
+            return null;
+        }
+        return (int) $cm->instance;
     }
 
     /**

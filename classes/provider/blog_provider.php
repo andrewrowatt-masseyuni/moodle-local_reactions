@@ -119,8 +119,7 @@ class blog_provider implements content_provider {
     #[\Override]
     public function get_context_for_item(int $itemid): ?\context {
         global $DB;
-        $module = $DB->get_field('post', 'module', ['id' => $itemid]);
-        if ($module !== 'blog') {
+        if (!$DB->record_exists('post', ['id' => $itemid, 'module' => 'blog'])) {
             return null;
         }
         return \context_system::instance();
@@ -160,12 +159,17 @@ class blog_provider implements content_provider {
     #[\Override]
     public function get_privacy_contexts_sql(int $userid): ?array {
         // Blog reactions exist at SYSTEM context. If the user has any, add system context.
+        // EXISTS avoids the cross-join that a JOIN without a key condition would produce.
         $sql = "SELECT ctx.id
                   FROM {context} ctx
-                  JOIN {local_reactions} lr ON lr.component = :component
-                                           AND lr.itemtype = :itemtype
                  WHERE ctx.contextlevel = :contextlevel
-                   AND lr.userid = :userid";
+                   AND EXISTS (
+                       SELECT 1
+                         FROM {local_reactions} lr
+                        WHERE lr.component = :component
+                          AND lr.itemtype = :itemtype
+                          AND lr.userid = :userid
+                   )";
         $params = [
             'contextlevel' => CONTEXT_SYSTEM,
             'component' => $this->get_component(),

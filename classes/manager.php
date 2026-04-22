@@ -33,6 +33,12 @@ class manager {
     /** @var string Canonical item type for forum post reactions. */
     public const ITEMTYPE_POST = 'post';
 
+    /** @var string Canonical component name for blog entry reactions. */
+    public const COMPONENT_BLOG = 'core_blog';
+
+    /** @var string Canonical item type for blog entry reactions. */
+    public const ITEMTYPE_ENTRY = 'entry';
+
     /** @var array<string,string>|null Per-request cache of the parsed emoji set. */
     private static ?array $emojisetcache = null;
 
@@ -158,18 +164,22 @@ class manager {
         // (user, item, emoji) can both reach this insert; the unique index will
         // reject the loser with a dml_write_exception. Treat that as an idempotent
         // success so a double-click does not surface as an error to the user.
-        $record = new \stdClass();
-        $record->component = $component;
-        $record->itemtype = $itemtype;
-        $record->itemid = $itemid;
-        $record->userid = $userid;
-        $record->emoji = $emoji;
-        $record->timecreated = time();
+        $key = [
+            'component' => $component,
+            'itemtype' => $itemtype,
+            'itemid' => $itemid,
+            'userid' => $userid,
+            'emoji' => $emoji,
+        ];
+        $record = (object) ($key + ['timecreated' => time()]);
         try {
             $DB->insert_record('local_reactions', $record);
         } catch (\dml_write_exception $e) {
-            // Row already exists thanks to a concurrent add - nothing more to do.
-            unset($e);
+            // Only swallow the "duplicate key" case; re-throw any other write failure
+            // so a real DB error doesn't get reported to the user as a successful add.
+            if (!$DB->record_exists('local_reactions', $key)) {
+                throw $e;
+            }
         }
         if ($transaction) {
             $DB->commit_delegated_transaction($transaction);

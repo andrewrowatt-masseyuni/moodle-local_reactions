@@ -36,7 +36,10 @@ class behat_local_reactions_generator extends behat_generator_base {
             'reactions' => [
                 'singular' => 'reaction',
                 'datagenerator' => 'reaction',
-                'required' => ['user', 'post', 'emoji'],
+                // Only 'user' and 'emoji' are universally required; the row must also provide
+                // one of 'post' (forum post subject) or 'blogentry' (blog entry subject) — the
+                // generator itself enforces that.
+                'required' => ['user', 'emoji'],
                 'switchids' => ['user' => 'userid'],
             ],
             'enabled forums' => [

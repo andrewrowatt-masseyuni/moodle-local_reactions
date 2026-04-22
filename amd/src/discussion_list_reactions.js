@@ -390,8 +390,6 @@ const loadGradingReactions = async(container) => {
         return;
     }
 
-    const compactview = config.compactview_grading ?? config.compactview;
-
     try {
         const response = await Ajax.call([{
             methodname: 'local_reactions_get_reactions_for_grading',
@@ -418,8 +416,8 @@ const loadGradingReactions = async(container) => {
 
                 const data = reactionsMap[postId] || {itemid: postId, counts: [], userreactions: []};
                 const context = buildTemplateContext(data, config.emojis, {
-                    compactview: compactview,
-                    userreactions: config.showselfreactionsgrading ? (data.userreactions || []) : [],
+                    compactview: config.compactview,
+                    userreactions: data.userreactions || [],
                 });
 
                 const {element: barElement, js} = await renderToElement(
@@ -442,47 +440,45 @@ const loadGradingReactions = async(container) => {
  * Observe the DOM for the grading panel to appear and load reactions when posts are inserted.
  *
  * The whole-forum grading panel dynamically inserts posts into
- * [data-region="module_content"]. This observer detects those insertions
- * and triggers reaction loading for each batch of posts.
+ * [data-region="module_content"]. Two-phase approach: cheaply wait on document.body
+ * for the grading drawer to appear (childList-only, no subtree), then disconnect and
+ * observe the drawer directly with subtree:true for post insertions inside it.
  */
 const observeGradingPanel = () => {
-    const observer = new MutationObserver((mutations) => {
+    const handlePostMutations = (target) => {
         if (gradingInserting) {
             return;
         }
-        for (const mutation of mutations) {
-            // Handle content replaced inside an existing module_content region.
-            const target = mutation.target.closest?.('[data-region="module_content"]') || mutation.target;
-            if (target.matches?.('[data-region="module_content"]')
-                && target.querySelector('.post-containerarticle[data-post-id]')) {
-                loadGradingReactions(target);
-                return;
-            }
-            // Handle new nodes added that contain posts.
-            for (const node of mutation.addedNodes) {
-                if (node.nodeType !== Node.ELEMENT_NODE) {
-                    continue;
-                }
-                const container = node.closest?.('[data-region="module_content"]')
-                    || node.querySelector?.('[data-region="module_content"]');
-                if (container && container.querySelector('.post-container article[data-post-id]')) {
-                    loadGradingReactions(container);
-                    return;
-                }
-                // The added node itself may be inside the module_content region.
-                if (node.matches?.('.post-container article[data-post-id]')
-                    || node.querySelector?.('.post-container article[data-post-id]')) {
-                    const moduleContent = node.closest?.('[data-region="module_content"]');
-                    if (moduleContent) {
-                        loadGradingReactions(moduleContent);
-                        return;
-                    }
-                }
-            }
+        if (target.querySelector('.post-container article[data-post-id]')) {
+            loadGradingReactions(target);
+        }
+    };
+
+    const attachScopedObserver = (moduleContent) => {
+        // Load immediately if posts are already present when we attach.
+        handlePostMutations(moduleContent);
+
+        const scopedObserver = new MutationObserver(() => {
+            handlePostMutations(moduleContent);
+        });
+        scopedObserver.observe(moduleContent, {childList: true, subtree: true});
+    };
+
+    const existing = document.querySelector('[data-region="module_content"]');
+    if (existing) {
+        attachScopedObserver(existing);
+        return;
+    }
+
+    // The drawer isn't in the DOM yet. Watch body for it to be inserted, then swap over.
+    const bootstrapObserver = new MutationObserver(() => {
+        const moduleContent = document.querySelector('[data-region="module_content"]');
+        if (moduleContent) {
+            bootstrapObserver.disconnect();
+            attachScopedObserver(moduleContent);
         }
     });
-
-    observer.observe(document.body, {childList: true, subtree: true});
+    bootstrapObserver.observe(document.body, {childList: true, subtree: true});
 };
 
 /**

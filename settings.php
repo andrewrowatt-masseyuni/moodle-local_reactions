@@ -34,6 +34,13 @@ if ($hassiteconfig) {
         1
     ));
 
+    $settings->add(new admin_setting_configcheckbox(
+        'local_reactions/enabledblog',
+        get_string('settings:enabledblog', 'local_reactions'),
+        get_string('settings:enabledblog_desc', 'local_reactions'),
+        0
+    ));
+
     $settings->add(new admin_setting_configtextarea(
         'local_reactions/emojis',
         get_string('settings:emojis', 'local_reactions'),

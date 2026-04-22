@@ -16,8 +16,10 @@
 
 namespace local_reactions\hooks\output;
 
+use local_reactions\provider_registry;
+
 /**
- * Hook callback to inject reactions JS on forum pages.
+ * Hook callback to inject the reactions AMD module on any page a provider claims.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
@@ -25,69 +27,22 @@ namespace local_reactions\hooks\output;
  */
 class before_footer_html_generation {
     /**
-     * Inject the reactions AMD module on forum pages.
+     * Schedule each claiming provider's AMD init calls.
      *
      * @param \core\hook\output\before_footer_html_generation $hook
      */
     public static function callback(\core\hook\output\before_footer_html_generation $hook): void {
         global $PAGE;
 
-        if (!get_config('local_reactions', 'enabled')) {
-            return;
-        }
-
-        // Only load on forum pages.
-        $pagetype = $PAGE->pagetype;
-        if (!in_array($pagetype, ['mod-forum-discuss', 'mod-forum-view', 'mod-forum-post'])) {
-            return;
-        }
-
-        // Check reactions are enabled for this specific forum.
-        $cm = $PAGE->cm;
-        if (!$cm) {
-            return;
-        }
-        $record = \local_reactions\manager::get_forum_config($cm->id);
-        if (!$record || !$record->enabled) {
-            return;
-        }
-
-        // Check the user has at least view capability.
-        $context = $PAGE->context;
-        if (!has_capability('local/reactions:view', $context)) {
-            return;
-        }
-
-        $emojiset = \local_reactions\manager::get_emoji_set();
-        $pollinterval = (int) get_config('local_reactions', 'pollinterval');
-
-        if ($pagetype === 'mod-forum-discuss' || $pagetype === 'mod-forum-post') {
-            // Individual discussion/post page: full interactive reactions.
-            $canreact = has_capability('local/reactions:react', $context);
-
-            $PAGE->requires->js_call_amd('local_reactions/reactions', 'init', [
-                [
-                    'contextid' => $context->id,
-                    'component' => \local_reactions\manager::COMPONENT_FORUM,
-                    'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-                    'canreact' => $canreact,
-                    'emojis' => $emojiset,
-                    'compactview' => !empty($record->compactview_discuss),
-                    'pollinterval' => $pollinterval,
-                ],
-            ]);
-        } else if ($pagetype === 'mod-forum-view') {
-            // Discussion list page: read-only aggregated reaction pills.
-            $PAGE->requires->js_call_amd('local_reactions/discussion_list_reactions', 'init', [
-                [
-                    'contextid' => $context->id,
-                    'component' => \local_reactions\manager::COMPONENT_FORUM,
-                    'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-                    'emojis' => $emojiset,
-                    'compactview' => !empty($record->compactview_list),
-                    'pollinterval' => $pollinterval,
-                ],
-            ]);
+        foreach (provider_registry::get_all() as $provider) {
+            $decision = $provider->resolve_for_page($PAGE);
+            if ($decision === null) {
+                continue;
+            }
+            foreach ($provider->get_js_calls($decision) as $call) {
+                [$amdmodule, $method, $args] = $call;
+                $PAGE->requires->js_call_amd($amdmodule, $method, $args);
+            }
         }
     }
 }

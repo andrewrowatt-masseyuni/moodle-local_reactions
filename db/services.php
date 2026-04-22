@@ -27,14 +27,14 @@ defined('MOODLE_INTERNAL') || die();
 $functions = [
     'local_reactions_toggle_reaction' => [
         'classname' => 'local_reactions\external\toggle_reaction',
-        'description' => 'Toggle an emoji reaction on a forum post',
+        'description' => 'Toggle an emoji reaction on a supported item (e.g. forum post, blog entry)',
         'type' => 'write',
         'ajax' => true,
         'loginrequired' => true,
     ],
     'local_reactions_get_reactions' => [
         'classname' => 'local_reactions\external\get_reactions',
-        'description' => 'Get emoji reactions for forum posts',
+        'description' => 'Get emoji reactions for a list of items',
         'type' => 'read',
         'ajax' => true,
         'loginrequired' => true,

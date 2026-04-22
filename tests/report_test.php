@@ -52,7 +52,8 @@ final class report_test extends \advanced_testcase {
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
 
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
-        $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
+        // Second post needed so totalposts=2 in the report; the generator call is the side effect.
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
 
         // Add reactions.
@@ -110,7 +111,8 @@ final class report_test extends \advanced_testcase {
             ->create_discussion(['course' => $course->id, 'forum' => $forum->id, 'userid' => $user1->id]);
 
         $post1 = $DB->get_record('forum_posts', ['discussion' => $discussion->id]);
-        $post2 = $this->getDataGenerator()->get_plugin_generator('mod_forum')
+        // Second post needed so user2 counts as an active poster; the generator call is the side effect.
+        $this->getDataGenerator()->get_plugin_generator('mod_forum')
             ->create_post(['discussion' => $discussion->id, 'userid' => $user2->id]);
 
         // Add reactions (user3 reacts but doesn't post).

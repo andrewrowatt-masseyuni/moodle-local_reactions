@@ -22,11 +22,15 @@ use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use local_reactions\provider_registry;
 
 // phpcs:disable Universal.OOStructures.AlphabeticExtendsImplements
 
 /**
  * Privacy Subsystem implementation for local_reactions.
+ *
+ * Fans out context discovery, userlists, export, and deletion to the registered content
+ * providers (forum, blog) so new content types add their own SQL without touching this file.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
@@ -67,30 +71,14 @@ class provider implements
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         $contextlist = new contextlist();
-
-        // Reactions are stored for forum posts - we need to find the forum module contexts.
-        $sql = "SELECT ctx.id
-                  FROM {context} ctx
-                  JOIN {course_modules} cm ON cm.id = ctx.instanceid AND ctx.contextlevel = :contextlevel
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                  JOIN {forum_posts} fp ON fp.discussion = fd.id
-                  JOIN {local_reactions} lr ON lr.component = :component
-                                           AND lr.itemtype = :itemtype
-                                           AND lr.itemid = fp.id
-                 WHERE lr.userid = :userid
-                   AND m.name = :modulename";
-
-        $params = [
-            'contextlevel' => CONTEXT_MODULE,
-            'component' => \local_reactions\manager::COMPONENT_FORUM,
-            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-            'userid' => $userid,
-            'modulename' => 'forum',
-        ];
-
-        $contextlist->add_from_sql($sql, $params);
-
+        foreach (provider_registry::get_all() as $cp) {
+            $parts = $cp->get_privacy_contexts_sql($userid);
+            if ($parts === null) {
+                continue;
+            }
+            [$sql, $params] = $parts;
+            $contextlist->add_from_sql($sql, $params);
+        }
         return $contextlist;
     }
 
@@ -101,30 +89,14 @@ class provider implements
      */
     public static function get_users_in_context(userlist $userlist) {
         $context = $userlist->get_context();
-
-        if (!$context instanceof \context_module) {
-            return;
+        foreach (provider_registry::get_all() as $cp) {
+            $parts = $cp->get_privacy_users_sql($context);
+            if ($parts === null) {
+                continue;
+            }
+            [$sql, $params] = $parts;
+            $userlist->add_from_sql('userid', $sql, $params);
         }
-
-        $sql = "SELECT lr.userid
-                  FROM {course_modules} cm
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                  JOIN {forum_posts} fp ON fp.discussion = fd.id
-                  JOIN {local_reactions} lr ON lr.component = :component
-                                           AND lr.itemtype = :itemtype
-                                           AND lr.itemid = fp.id
-                 WHERE cm.id = :cmid
-                   AND m.name = :modulename";
-
-        $params = [
-            'cmid' => $context->instanceid,
-            'component' => \local_reactions\manager::COMPONENT_FORUM,
-            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-            'modulename' => 'forum',
-        ];
-
-        $userlist->add_from_sql('userid', $sql, $params);
     }
 
     /**
@@ -142,48 +114,39 @@ class provider implements
         $user = $contextlist->get_user();
 
         foreach ($contextlist->get_contexts() as $context) {
-            if (!$context instanceof \context_module) {
-                continue;
+            $reactionrows = [];
+            foreach (provider_registry::get_all() as $cp) {
+                $parts = $cp->get_privacy_reaction_ids_sql($context, $user->id, null);
+                if ($parts === null) {
+                    continue;
+                }
+                [$sql, $params] = $parts;
+                $ids = $DB->get_fieldset_sql($sql, $params);
+                if (!empty($ids)) {
+                    [$insql, $inparams] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+                    $records = $DB->get_records_select(
+                        'local_reactions',
+                        "id $insql",
+                        $inparams,
+                        '',
+                        'id, emoji, component, itemtype, itemid, timecreated'
+                    );
+                    foreach ($records as $r) {
+                        $reactionrows[] = (object) [
+                            'emoji' => $r->emoji,
+                            'component' => $r->component,
+                            'itemtype' => $r->itemtype,
+                            'itemid' => $r->itemid,
+                            'timecreated' => \core_privacy\local\request\transform::datetime($r->timecreated),
+                        ];
+                    }
+                }
             }
 
-            // Get all reactions for this user in this context.
-            $sql = "SELECT lr.id, lr.emoji, lr.component, lr.itemtype, lr.itemid, lr.timecreated
-                      FROM {course_modules} cm
-                      JOIN {modules} m ON m.id = cm.module
-                      JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                      JOIN {forum_posts} fp ON fp.discussion = fd.id
-                      JOIN {local_reactions} lr ON lr.component = :component
-                                               AND lr.itemtype = :itemtype
-                                               AND lr.itemid = fp.id
-                     WHERE cm.id = :cmid
-                       AND m.name = :modulename
-                       AND lr.userid = :userid";
-
-            $params = [
-                'cmid' => $context->instanceid,
-                'component' => 'mod_forum',
-                'itemtype' => 'post',
-                'modulename' => 'forum',
-                'userid' => $user->id,
-            ];
-
-            $reactions = $DB->get_records_sql($sql, $params);
-
-            if (!empty($reactions)) {
-                $data = [];
-                foreach ($reactions as $reaction) {
-                    $data[] = (object) [
-                        'emoji' => $reaction->emoji,
-                        'component' => $reaction->component,
-                        'itemtype' => $reaction->itemtype,
-                        'itemid' => $reaction->itemid,
-                        'timecreated' => \core_privacy\local\request\transform::datetime($reaction->timecreated),
-                    ];
-                }
-
+            if (!empty($reactionrows)) {
                 writer::with_context($context)->export_data(
                     [get_string('pluginname', 'local_reactions')],
-                    (object) ['reactions' => $data]
+                    (object) ['reactions' => $reactionrows]
                 );
             }
         }
@@ -195,37 +158,7 @@ class provider implements
      * @param \context $context the context to delete in.
      */
     public static function delete_data_for_all_users_in_context(\context $context) {
-        global $DB;
-
-        if (!$context instanceof \context_module) {
-            return;
-        }
-
-        // Delete all reactions for forum posts in this module.
-        $sql = "SELECT lr.id
-                  FROM {course_modules} cm
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                  JOIN {forum_posts} fp ON fp.discussion = fd.id
-                  JOIN {local_reactions} lr ON lr.component = :component
-                                           AND lr.itemtype = :itemtype
-                                           AND lr.itemid = fp.id
-                 WHERE cm.id = :cmid
-                   AND m.name = :modulename";
-
-        $params = [
-            'cmid' => $context->instanceid,
-            'component' => \local_reactions\manager::COMPONENT_FORUM,
-            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-            'modulename' => 'forum',
-        ];
-
-        $reactionids = $DB->get_fieldset_sql($sql, $params);
-
-        if (!empty($reactionids)) {
-            [$insql, $inparams] = $DB->get_in_or_equal($reactionids, SQL_PARAMS_NAMED);
-            $DB->delete_records_select('local_reactions', "id $insql", $inparams);
-        }
+        self::delete_reactions_in_context($context, null, null);
     }
 
     /**
@@ -234,46 +167,12 @@ class provider implements
      * @param approved_contextlist $contextlist a list of contexts approved for deletion.
      */
     public static function delete_data_for_user(approved_contextlist $contextlist) {
-        global $DB;
-
         if (empty($contextlist->count())) {
             return;
         }
-
         $user = $contextlist->get_user();
-
         foreach ($contextlist->get_contexts() as $context) {
-            if (!$context instanceof \context_module) {
-                continue;
-            }
-
-            // Delete all reactions for this user in this context.
-            $sql = "SELECT lr.id
-                      FROM {course_modules} cm
-                      JOIN {modules} m ON m.id = cm.module
-                      JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                      JOIN {forum_posts} fp ON fp.discussion = fd.id
-                      JOIN {local_reactions} lr ON lr.component = :component
-                                               AND lr.itemtype = :itemtype
-                                               AND lr.itemid = fp.id
-                     WHERE cm.id = :cmid
-                       AND m.name = :modulename
-                       AND lr.userid = :userid";
-
-            $params = [
-                'cmid' => $context->instanceid,
-                'component' => 'mod_forum',
-                'itemtype' => 'post',
-                'modulename' => 'forum',
-                'userid' => $user->id,
-            ];
-
-            $reactionids = $DB->get_fieldset_sql($sql, $params);
-
-            if (!empty($reactionids)) {
-                [$insql, $inparams] = $DB->get_in_or_equal($reactionids, SQL_PARAMS_NAMED);
-                $DB->delete_records_select('local_reactions', "id $insql", $inparams);
-            }
+            self::delete_reactions_in_context($context, (int) $user->id, null);
         }
     }
 
@@ -283,47 +182,35 @@ class provider implements
      * @param approved_userlist $userlist The approved context and user information to delete information for.
      */
     public static function delete_data_for_users(approved_userlist $userlist) {
-        global $DB;
-
         $context = $userlist->get_context();
-
-        if (!$context instanceof \context_module) {
-            return;
-        }
-
         $userids = $userlist->get_userids();
-
         if (empty($userids)) {
             return;
         }
+        self::delete_reactions_in_context($context, null, $userids);
+    }
 
-        [$usersql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
-
-        // Delete all reactions for these users in this context.
-        $sql = "SELECT lr.id
-                  FROM {course_modules} cm
-                  JOIN {modules} m ON m.id = cm.module
-                  JOIN {forum_discussions} fd ON fd.forum = cm.instance
-                  JOIN {forum_posts} fp ON fp.discussion = fd.id
-                  JOIN {local_reactions} lr ON lr.component = :component
-                                           AND lr.itemtype = :itemtype
-                                           AND lr.itemid = fp.id
-                 WHERE cm.id = :cmid
-                   AND m.name = :modulename
-                   AND lr.userid $usersql";
-
-        $params = array_merge([
-            'cmid' => $context->instanceid,
-            'component' => \local_reactions\manager::COMPONENT_FORUM,
-            'itemtype' => \local_reactions\manager::ITEMTYPE_POST,
-            'modulename' => 'forum',
-        ], $userparams);
-
-        $reactionids = $DB->get_fieldset_sql($sql, $params);
-
-        if (!empty($reactionids)) {
-            [$insql, $inparams] = $DB->get_in_or_equal($reactionids, SQL_PARAMS_NAMED);
-            $DB->delete_records_select('local_reactions', "id $insql", $inparams);
+    /**
+     * Internal helper that deletes rows in {local_reactions} matching any provider's scoped SQL
+     * for the given context, optionally filtered by a single user or a set of users.
+     *
+     * @param \context $context
+     * @param int|null $userid
+     * @param int[]|null $userids
+     */
+    private static function delete_reactions_in_context(\context $context, ?int $userid, ?array $userids): void {
+        global $DB;
+        foreach (provider_registry::get_all() as $cp) {
+            $parts = $cp->get_privacy_reaction_ids_sql($context, $userid, $userids);
+            if ($parts === null) {
+                continue;
+            }
+            [$sql, $params] = $parts;
+            $ids = $DB->get_fieldset_sql($sql, $params);
+            if (!empty($ids)) {
+                [$insql, $inparams] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+                $DB->delete_records_select('local_reactions', "id $insql", $inparams);
+            }
         }
     }
 }

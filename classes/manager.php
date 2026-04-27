@@ -458,6 +458,29 @@ class manager {
     }
 
     /**
+     * Whether any blog entry has more than one reaction from a single user.
+     *
+     * Used to lock the site-wide "allow multiple reactions on blog posts" setting:
+     * once any user has stacked more than one emoji on a single entry, switching
+     * back to single-reaction mode would silently drop those rows on next react.
+     *
+     * @return bool True if at least one (userid, itemid) pair has >1 reactions.
+     */
+    public static function blog_has_multiple_reactions_per_user(): bool {
+        global $DB;
+        $sql = "SELECT 1
+                  FROM {local_reactions}
+                 WHERE component = :component
+                   AND itemtype = :itemtype
+              GROUP BY userid, itemid
+                HAVING COUNT(*) > 1";
+        return $DB->record_exists_sql($sql, [
+            'component' => self::COMPONENT_BLOG,
+            'itemtype' => self::ITEMTYPE_ENTRY,
+        ]);
+    }
+
+    /**
      * Check whether any reactions exist for posts belonging to a given forum.
      *
      * @param int $forumid The forum instance ID (forum.id).

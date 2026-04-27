@@ -41,6 +41,13 @@ if ($hassiteconfig) {
         0
     ));
 
+    $settings->add(new \local_reactions\admin_setting_allowmultiplereactionsblog(
+        'local_reactions/allowmultiplereactionsblog',
+        get_string('settings:allowmultiplereactionsblog', 'local_reactions'),
+        get_string('settings:allowmultiplereactionsblog_desc', 'local_reactions'),
+        0
+    ));
+
     $settings->add(new admin_setting_configtextarea(
         'local_reactions/emojis',
         get_string('settings:emojis', 'local_reactions'),

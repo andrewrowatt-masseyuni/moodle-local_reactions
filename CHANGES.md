@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.7.1
+- Added site-wide "Enable multiple reactions per-user per blog post" setting (off by default). The setting locks in the "on" position once a user has stacked more than one emoji on a single blog entry.
+
 ## v1.7.0
 - Reactions are now available on Moodle core blog entries. Thanks for the suggestion Hananoshika Yomaru.
 

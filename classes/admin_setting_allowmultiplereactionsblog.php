@@ -14,19 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace local_reactions;
+
 /**
- * Version information for Reactions
+ * Admin checkbox that locks itself "on" once any user has accumulated more than
+ * one reaction on a single blog post — switching back to single-reaction mode
+ * after that point would silently drop existing reactions.
  *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->component    = 'local_reactions';
-$plugin->release      = '1.7.1';
-$plugin->version      = 2026042700;
-$plugin->requires     = 2024100700;
-$plugin->supported    = [405, 501];
-$plugin->maturity     = MATURITY_STABLE;
+class admin_setting_allowmultiplereactionsblog extends \admin_setting_configcheckbox {
+    #[\Override]
+    public function write_setting($data) {
+        $current = (string) $this->get_setting();
+        $newvalue = ((string) $data === $this->yes) ? $this->yes : $this->no;
+        if (
+            $current === $this->yes
+                && $newvalue === $this->no
+                && manager::blog_has_multiple_reactions_per_user()
+        ) {
+            return get_string('settings:allowmultiplereactionsblog_locked', 'local_reactions');
+        }
+        return parent::write_setting($data);
+    }
+}

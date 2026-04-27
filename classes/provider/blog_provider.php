@@ -152,7 +152,7 @@ class blog_provider implements content_provider {
         }
         $result = new \stdClass();
         $result->enabled = true;
-        $result->allowmultiple = true;
+        $result->allowmultiple = (bool) get_config('local_reactions', 'allowmultiplereactionsblog');
         return $result;
     }
 

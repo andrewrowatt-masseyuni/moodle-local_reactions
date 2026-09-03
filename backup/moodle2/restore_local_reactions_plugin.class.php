@@ -25,12 +25,13 @@
 /**
  * Restore support for local_reactions at the module level.
  *
- * Restores per-forum reactions settings and individual reaction records.
- * Reaction records are deferred to after_restore_module() because forum
- * posts have not yet been restored when process_reaction() is called.
+ * Restores per-activity reactions settings and individual reaction records for the
+ * module types the plugin supports (forum posts and database activity entries).
+ * Reaction records are deferred to after_restore_module() because the items they
+ * point at have not yet been restored when process_reaction() is called.
  */
 class restore_local_reactions_plugin extends restore_local_plugin {
-    /** @var array Reaction records to insert after forum posts are restored. */
+    /** @var array Reaction records to insert after the items they belong to are restored. */
     protected $pendingreactions = [];
 
     /**
@@ -68,9 +69,9 @@ class restore_local_reactions_plugin extends restore_local_plugin {
     /**
      * Stash an individual reaction record for deferred processing.
      *
-     * Forum posts are restored after the module structure step, so
-     * post ID mappings are not available yet. We store reaction data
-     * and insert it in after_restore_module().
+     * The reacted-to items (forum posts, database entries) are restored after the
+     * module structure step, so their ID mappings are not available yet. We store
+     * reaction data and insert it in after_restore_module().
      *
      * @param array $data The backed-up reaction data.
      */
@@ -79,13 +80,18 @@ class restore_local_reactions_plugin extends restore_local_plugin {
     }
 
     /**
-     * Insert deferred reaction records now that forum posts have been restored.
+     * Insert deferred reaction records now that the items they belong to have been restored.
      */
     public function after_restore_module() {
         global $DB;
 
+        $itemmapping = $this->get_item_mapping_name();
+        if ($itemmapping === null) {
+            return;
+        }
+
         foreach ($this->pendingreactions as $data) {
-            $newitemid = $this->get_mappingid('forum_post', $data->itemid);
+            $newitemid = $this->get_mappingid($itemmapping, $data->itemid);
             if (!$newitemid) {
                 continue;
             }
@@ -100,6 +106,23 @@ class restore_local_reactions_plugin extends restore_local_plugin {
             unset($data->id);
 
             $DB->insert_record('local_reactions', $data);
+        }
+    }
+
+    /**
+     * Return the restore mapping name that translates old item IDs to new ones for
+     * the module being restored.
+     *
+     * @return string|null The mapping name, or null for module types that cannot carry reactions.
+     */
+    private function get_item_mapping_name(): ?string {
+        switch ($this->task->get_modulename()) {
+            case 'forum':
+                return 'forum_post';
+            case 'data':
+                return 'data_record';
+            default:
+                return null;
         }
     }
 }

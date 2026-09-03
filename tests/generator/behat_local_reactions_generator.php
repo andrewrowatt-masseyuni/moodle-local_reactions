@@ -37,8 +37,8 @@ class behat_local_reactions_generator extends behat_generator_base {
                 'singular' => 'reaction',
                 'datagenerator' => 'reaction',
                 // Only 'user' and 'emoji' are universally required; the row must also provide
-                // one of 'post' (forum post subject) or 'blogentry' (blog entry subject) — the
-                // generator itself enforces that.
+                // one of 'post' (forum post subject), 'blogentry' (blog entry subject) or
+                // 'dataentry' (database entry field content) — the generator itself enforces that.
                 'required' => ['user', 'emoji'],
                 'switchids' => ['user' => 'userid'],
             ],
@@ -46,6 +46,11 @@ class behat_local_reactions_generator extends behat_generator_base {
                 'singular' => 'enabled forum',
                 'datagenerator' => 'enabled_forum',
                 'required' => ['forum', 'course'],
+            ],
+            'enabled databases' => [
+                'singular' => 'enabled database',
+                'datagenerator' => 'enabled_database',
+                'required' => ['data', 'course'],
             ],
         ];
     }

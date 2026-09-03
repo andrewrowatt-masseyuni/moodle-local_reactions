@@ -41,6 +41,7 @@ class provider_registry {
         self::$providers = [
             new \local_reactions\provider\forum_provider(),
             new \local_reactions\provider\blog_provider(),
+            new \local_reactions\provider\data_provider(),
         ];
         return self::$providers;
     }

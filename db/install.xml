@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/reactions/db" VERSION="20260411" COMMENT="local_reactions database tables"
+<XMLDB PATH="local/reactions/db" VERSION="20260904" COMMENT="local_reactions database tables"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
-    <TABLE NAME="local_reactions" COMMENT="Stores emoji reactions on forum posts">
+    <TABLE NAME="local_reactions" COMMENT="Stores emoji reactions on forum posts, database activity entries and blog entries">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="component" TYPE="char" LENGTH="100" NOTNULL="true" COMMENT="Component e.g. mod_forum"/>
-        <FIELD NAME="itemtype" TYPE="char" LENGTH="50" NOTNULL="true" COMMENT="Item type e.g. post"/>
+        <FIELD NAME="component" TYPE="char" LENGTH="100" NOTNULL="true" COMMENT="Component e.g. mod_forum, mod_data, core_blog"/>
+        <FIELD NAME="itemtype" TYPE="char" LENGTH="50" NOTNULL="true" COMMENT="Item type e.g. post, record, entry"/>
         <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="ID of the item being reacted to"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="User who reacted"/>
         <FIELD NAME="emoji" TYPE="char" LENGTH="20" NOTNULL="true" COMMENT="Emoji shortcode e.g. thumbsup"/>
@@ -23,15 +23,15 @@
         <INDEX NAME="item_lookup" UNIQUE="false" FIELDS="component, itemtype, itemid" COMMENT="Fast lookup of all reactions for an item"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="local_reactions_enabled" COMMENT="Per-forum toggle for emoji reactions">
+    <TABLE NAME="local_reactions_enabled" COMMENT="Per-activity settings for emoji reactions, keyed by course module ID">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" COMMENT="Course module ID"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = reactions enabled"/>
-        <FIELD NAME="compactview_list" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on discussion list page"/>
-        <FIELD NAME="compactview_discuss" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on individual discussion page"/>
-        <FIELD NAME="allowmultiplereactions" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" COMMENT="1 = users may react with multiple emoji per post (default); 0 = single emoji per user per post"/>
-        <FIELD NAME="onlypeerreactionsgrading" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" COMMENT="1 = when grading, only show peer reactions (exclude self-reactions and reactions by non-students)"/>
+        <FIELD NAME="compactview_list" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on the multi-item page (forum discussion list, database list view)"/>
+        <FIELD NAME="compactview_discuss" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" COMMENT="1 = compact view on the single-item page (forum discussion, database single view)"/>
+        <FIELD NAME="allowmultiplereactions" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" COMMENT="1 = users may react with multiple emoji per item (default); 0 = single emoji per user per item"/>
+        <FIELD NAME="onlypeerreactionsgrading" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" COMMENT="Forum only: 1 = when grading, only show peer reactions (exclude self-reactions and reactions by non-students)"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>

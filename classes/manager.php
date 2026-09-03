@@ -39,11 +39,17 @@ class manager {
     /** @var string Canonical item type for blog entry reactions. */
     public const ITEMTYPE_ENTRY = 'entry';
 
+    /** @var string Canonical component name for database activity entry reactions. */
+    public const COMPONENT_DATA = 'mod_data';
+
+    /** @var string Canonical item type for database activity entry reactions. */
+    public const ITEMTYPE_RECORD = 'record';
+
     /** @var array<string,string>|null Per-request cache of the parsed emoji set. */
     private static ?array $emojisetcache = null;
 
-    /** @var array<int,\stdClass|null> Per-request cache of forum config keyed by cmid. */
-    private static array $forumconfigcache = [];
+    /** @var array<int,\stdClass|null> Per-request cache of per-activity config keyed by cmid. */
+    private static array $moduleconfigcache = [];
 
     /**
      * Get the configured emoji set.
@@ -72,34 +78,36 @@ class manager {
     }
 
     /**
-     * Look up the per-forum reactions configuration for a course module.
+     * Look up the per-activity reactions configuration for a course module.
      *
-     * Results are cached per-request so repeated lookups (e.g. the two output hooks
-     * firing back-to-back on the same page render) hit the database only once.
+     * {local_reactions_enabled} is keyed by cmid, so the same row shape serves every module
+     * type the plugin supports (forum, database activity). Results are cached per-request so
+     * repeated lookups (e.g. the two output hooks firing back-to-back on the same page render)
+     * hit the database only once.
      *
-     * @param int $cmid Course module ID of the forum.
+     * @param int $cmid Course module ID of the activity.
      * @return \stdClass|null The local_reactions_enabled record, or null if none exists.
      */
-    public static function get_forum_config(int $cmid): ?\stdClass {
-        if (!\array_key_exists($cmid, self::$forumconfigcache)) {
+    public static function get_module_config(int $cmid): ?\stdClass {
+        if (!\array_key_exists($cmid, self::$moduleconfigcache)) {
             global $DB;
             $record = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
-            self::$forumconfigcache[$cmid] = $record ?: null;
+            self::$moduleconfigcache[$cmid] = $record ?: null;
         }
-        return self::$forumconfigcache[$cmid];
+        return self::$moduleconfigcache[$cmid];
     }
 
     /**
-     * Clear the in-memory forum config cache so subsequent reads see fresh data.
+     * Clear the in-memory per-activity config cache so subsequent reads see fresh data.
      *
      * @param int|null $cmid Clear only this cmid, or pass null to clear the whole cache.
      */
-    public static function clear_forum_config_cache(?int $cmid = null): void {
+    public static function clear_module_config_cache(?int $cmid = null): void {
         if ($cmid === null) {
-            self::$forumconfigcache = [];
+            self::$moduleconfigcache = [];
             return;
         }
-        unset(self::$forumconfigcache[$cmid]);
+        unset(self::$moduleconfigcache[$cmid]);
     }
 
     /**
@@ -324,7 +332,7 @@ class manager {
         if (!($context instanceof \context_module)) {
             return true;
         }
-        $record = self::get_forum_config($context->instanceid);
+        $record = self::get_module_config($context->instanceid);
         if (!$record || !isset($record->onlypeerreactionsgrading)) {
             return true;
         }
@@ -500,6 +508,29 @@ class manager {
                 'forumid' => $forumid,
                 'component' => self::COMPONENT_FORUM,
                 'itemtype' => self::ITEMTYPE_POST,
+            ]
+        );
+    }
+
+    /**
+     * Check whether any reactions exist for entries belonging to a given database activity.
+     *
+     * @param int $dataid The database activity instance ID (data.id).
+     * @return bool True if at least one reaction exists.
+     */
+    public static function data_has_reactions(int $dataid): bool {
+        global $DB;
+        return $DB->record_exists_sql(
+            'SELECT 1
+               FROM {local_reactions} lr
+               JOIN {data_records} dr ON lr.itemid = dr.id
+              WHERE dr.dataid = :dataid
+                AND lr.component = :component
+                AND lr.itemtype = :itemtype',
+            [
+                'dataid' => $dataid,
+                'component' => self::COMPONENT_DATA,
+                'itemtype' => self::ITEMTYPE_RECORD,
             ]
         );
     }

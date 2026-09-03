@@ -19,10 +19,13 @@
  * Generic across content providers (forum posts, blog entries, etc.) — all DOM
  * discovery is driven by the `selectors` config block supplied by the provider:
  *   - `item`: CSS selector that matches each reactable item's root element.
- *   - `itemIdAttr` OR `itemIdPrefix`: how to extract an integer ID from an item
- *     element (attribute value, or strip prefix from element id).
+ *   - `itemIdAttr`, `itemIdPrefix` OR `itemIdOrder`: how to extract an integer ID
+ *     from an item element (attribute value, strip prefix from element id, or —
+ *     when the markup carries no ID at all, as in the database activity's default
+ *     templates — a server-supplied array of IDs mapped onto items by position).
  *   - `insertBeforeSelector`: preferred anchor — bar is inserted before it.
  *   - `appendFallbackSelectors`: ordered list of fallbacks — bar is appended.
+ *   - `appendToItem`: append the bar into the item element itself.
  *   - `mutationRoot` (optional): observe this for dynamically added items.
  *
  * Renders cached reactions instantly from IndexedDB, then refreshes from the
@@ -54,6 +57,9 @@ let toggleInProgress = false;
 /** @var {boolean} Whether polling has been initialised. */
 let pollingInitialised = false;
 
+/** @var {boolean} Set when the page markup does not match the config, disabling the module. */
+let disabled = false;
+
 /**
  * Initialise the reactions module.
  *
@@ -61,6 +67,9 @@ let pollingInitialised = false;
  */
 export const init = (cfg) => {
     config = cfg;
+    if (!validatePositionalMapping()) {
+        return;
+    }
     loadReactions();
 
     // Close any open picker when clicking outside.
@@ -93,6 +102,45 @@ export const init = (cfg) => {
 };
 
 /**
+ * Check that a positional (`itemIdOrder`) config still lines up with the rendered page.
+ *
+ * Positional mapping is only safe while the number of item elements matches the number of
+ * server-supplied IDs exactly — a customised template, or markup that no longer matches the
+ * item selector, would otherwise attach reactions to the wrong entries. When they disagree we
+ * disable the module rather than risk that, and clear the space-reserving CSS so the page does
+ * not keep an orphaned skeleton.
+ *
+ * @returns {boolean} True when the module may continue.
+ */
+const validatePositionalMapping = () => {
+    const selectors = config.selectors || {};
+    if (!selectors.itemIdOrder) {
+        return true;
+    }
+    const found = document.querySelectorAll(selectors.item).length;
+    if (found === selectors.itemIdOrder.length) {
+        return true;
+    }
+    disabled = true;
+    document.getElementById('local-reactions-reserve')?.remove();
+    window.console.warn(
+        `local_reactions: found ${found} items for "${selectors.item}" but the server listed `
+        + `${selectors.itemIdOrder.length}; reactions not rendered.`
+    );
+    return false;
+};
+
+/**
+ * All item elements on the page, in document order.
+ *
+ * @returns {HTMLElement[]}
+ */
+const getOrderedItems = () => {
+    const itemSelector = (config.selectors && config.selectors.item) || '';
+    return itemSelector ? Array.from(document.querySelectorAll(itemSelector)) : [];
+};
+
+/**
  * Close all open emoji pickers.
  */
 const closeAllPickers = () => {
@@ -109,9 +157,10 @@ const closeAllPickers = () => {
 /**
  * Extract the integer item ID from an item element using the configured strategy.
  *
- * Supports two strategies declared in config.selectors:
+ * Supports three strategies declared in config.selectors:
  *   - `itemIdAttr`: read the value of the named attribute (e.g. `data-post-id`).
  *   - `itemIdPrefix`: strip a fixed prefix from the element's `id` (e.g. `b123` → `123`).
+ *   - `itemIdOrder`: look the ID up by the element's position among the item elements.
  *
  * @param {HTMLElement} el The item element.
  * @returns {number} Parsed integer ID, or NaN if it could not be determined.
@@ -123,6 +172,10 @@ const getItemId = (el) => {
     }
     if (selectors.itemIdPrefix && el.id && el.id.startsWith(selectors.itemIdPrefix)) {
         return parseInt(el.id.slice(selectors.itemIdPrefix.length));
+    }
+    if (selectors.itemIdOrder) {
+        const index = getOrderedItems().indexOf(el);
+        return index === -1 ? NaN : parseInt(selectors.itemIdOrder[index]);
     }
     return NaN;
 };
@@ -136,10 +189,16 @@ const getItemId = (el) => {
 const getItemElement = (itemId) => {
     const selectors = config.selectors || {};
     if (selectors.itemIdAttr) {
-        return document.querySelector(`[${selectors.itemIdAttr}="${itemId}"]`);
+        // Qualify with the item selector so an unrelated element carrying the same
+        // attribute elsewhere on the page cannot be mistaken for an item.
+        return document.querySelector(`${selectors.item}[${selectors.itemIdAttr}="${itemId}"]`);
     }
     if (selectors.itemIdPrefix) {
         return document.getElementById(`${selectors.itemIdPrefix}${itemId}`);
+    }
+    if (selectors.itemIdOrder) {
+        const index = selectors.itemIdOrder.findIndex((id) => parseInt(id) === itemId);
+        return index === -1 ? null : (getOrderedItems()[index] || null);
     }
     return null;
 };
@@ -151,11 +210,7 @@ const getItemElement = (itemId) => {
  */
 const collectItemIds = () => {
     const ids = [];
-    const itemSelector = (config.selectors && config.selectors.item) || '';
-    if (!itemSelector) {
-        return ids;
-    }
-    document.querySelectorAll(itemSelector).forEach((el) => {
+    getOrderedItems().forEach((el) => {
         const id = getItemId(el);
         if (id) {
             ids.push(id);
@@ -167,15 +222,20 @@ const collectItemIds = () => {
 /**
  * Insert an element at the provider's preferred position within an item.
  *
- * Tries `insertBeforeSelector` first (inserts element before the matched anchor's position,
- * using the anchor's parent), then falls back to appending into the first matching
- * `appendFallbackSelectors` entry.
+ * With `appendToItem` the item element *is* the insertion point, so the element is appended
+ * straight into it. Otherwise it tries `insertBeforeSelector` first (inserts element before the
+ * matched anchor's position, using the anchor's parent), then falls back to appending into the
+ * first matching `appendFallbackSelectors` entry.
  *
  * @param {HTMLElement} itemEl The item root element.
  * @param {HTMLElement} element The element to insert.
  */
 const insertBar = (itemEl, element) => {
     const selectors = config.selectors || {};
+    if (selectors.appendToItem) {
+        itemEl.appendChild(element);
+        return;
+    }
     if (selectors.insertBeforeSelector) {
         const anchor = itemEl.querySelector(selectors.insertBeforeSelector);
         if (anchor && anchor.parentElement) {
@@ -238,11 +298,10 @@ const insertSkeletons = (itemIds) => {
  * then fetches fresh data from the web service and animates any differences.
  */
 const loadReactions = async() => {
-    const itemSelector = (config.selectors && config.selectors.item) || '';
-    if (!itemSelector) {
+    if (disabled) {
         return;
     }
-    const items = document.querySelectorAll(itemSelector);
+    const items = getOrderedItems();
     if (!items.length) {
         return;
     }

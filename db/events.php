@@ -29,4 +29,8 @@ $observers = [
         'eventname' => '\mod_forum\event\post_deleted',
         'callback'  => '\local_reactions\observer::post_deleted',
     ],
+    [
+        'eventname' => '\mod_data\event\record_deleted',
+        'callback'  => '\local_reactions\observer::record_deleted',
+    ],
 ];

@@ -40,4 +40,21 @@ class observer {
             'itemid'    => $event->objectid,
         ]);
     }
+
+    /**
+     * Clean up reactions belonging to a database activity entry that has just been deleted.
+     *
+     * Keeps {local_reactions} consistent with {data_records} so counts never include
+     * reactions on entries that no longer exist.
+     *
+     * @param \mod_data\event\record_deleted $event The record_deleted event.
+     */
+    public static function record_deleted(\mod_data\event\record_deleted $event): void {
+        global $DB;
+        $DB->delete_records('local_reactions', [
+            'component' => manager::COMPONENT_DATA,
+            'itemtype'  => manager::ITEMTYPE_RECORD,
+            'itemid'    => $event->objectid,
+        ]);
+    }
 }

@@ -23,37 +23,100 @@
  */
 
 /**
- * Map of form field => [db field on local_reactions_enabled, default for new forums].
+ * Module types that expose the per-activity reactions settings, mapped to the site-wide
+ * admin setting that has to be on before the settings appear.
  *
- * Display toggles default off; multi-reaction and peer-grading default on.
+ * @return array<string, string> modulename => admin setting name.
+ */
+function local_reactions_get_supported_modules(): array {
+    return [
+        'forum' => 'enabled',
+        'data' => 'enableddata',
+    ];
+}
+
+/**
+ * Form elements making up the reactions settings group for a module type.
  *
+ * Each entry maps the form field name to the language string key used for both its label and
+ * its help button. The first entry is always the parent "enable" toggle; the remaining ones
+ * are hidden while the parent is unchecked. The database activity omits the peer-grading
+ * option, which only affects the forum's whole-forum grading panel.
+ *
+ * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
+ * @return array<string, string> form field name => language string key.
+ */
+function local_reactions_get_form_elements(string $modulename): array {
+    if ($modulename === 'data') {
+        return [
+            'local_reactions_enabled'                => 'enablereactionsdata',
+            'local_reactions_compactview_list'       => 'compactview_datalist',
+            'local_reactions_compactview_discuss'    => 'compactview_datasingle',
+            'local_reactions_allowmultiplereactions' => 'allowmultiplereactionsdata',
+        ];
+    }
+    return [
+        'local_reactions_enabled'                  => 'enablereactions',
+        'local_reactions_compactview_list'         => 'compactview_list',
+        'local_reactions_compactview_discuss'      => 'compactview_discuss',
+        'local_reactions_allowmultiplereactions'   => 'allowmultiplereactions',
+        'local_reactions_onlypeerreactionsgrading' => 'onlypeerreactionsgrading',
+    ];
+}
+
+/**
+ * Map of form field => [db field on local_reactions_enabled, default for new activities].
+ *
+ * Display toggles default off; multi-reaction and peer-grading default on. Fields the module
+ * does not offer are left out, so saving never overwrites them.
+ *
+ * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
  * @return array<string, array{0: string, 1: int}>
  */
-function local_reactions_get_form_fieldmap(): array {
-    return [
+function local_reactions_get_form_fieldmap(string $modulename = 'forum'): array {
+    $fieldmap = [
         'local_reactions_enabled'                  => ['enabled', 0],
         'local_reactions_compactview_list'         => ['compactview_list', 0],
         'local_reactions_compactview_discuss'      => ['compactview_discuss', 0],
         'local_reactions_allowmultiplereactions'   => ['allowmultiplereactions', 1],
         'local_reactions_onlypeerreactionsgrading' => ['onlypeerreactionsgrading', 1],
     ];
+    return array_intersect_key($fieldmap, local_reactions_get_form_elements($modulename));
 }
 
 /**
- * Add "Enable reactions" checkbox to the forum settings form.
+ * Whether the given activity already has reactions on its items, which locks the
+ * "allow multiple reactions" setting in the on position.
+ *
+ * @param string $modulename The module name, e.g. 'forum' or 'data'.
+ * @param int $instanceid The activity instance ID.
+ * @return bool
+ */
+function local_reactions_instance_has_reactions(string $modulename, int $instanceid): bool {
+    if (!$instanceid) {
+        return false;
+    }
+    if ($modulename === 'data') {
+        return \local_reactions\manager::data_has_reactions($instanceid);
+    }
+    return \local_reactions\manager::forum_has_reactions($instanceid);
+}
+
+/**
+ * Add the "Reactions" settings section to a supported activity's settings form.
  *
  * @param moodleform $formwrapper The form wrapper.
  * @param MoodleQuickForm $mform The form object.
  */
 function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
-    if (!get_config('local_reactions', 'enabled')) {
-        return;
-    }
-
     $cm = $formwrapper->get_current();
 
-    // Only show for forums.
-    if ($cm->modulename !== 'forum') {
+    $supported = local_reactions_get_supported_modules();
+    $modulename = $cm->modulename ?? '';
+    if (!isset($supported[$modulename])) {
+        return;
+    }
+    if (!get_config('local_reactions', $supported[$modulename])) {
         return;
     }
 
@@ -64,29 +127,24 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
     );
 
     // Parent toggle first, then the rest which hide when the parent is unchecked.
-    $mform->addElement('checkbox', 'local_reactions_enabled', get_string('enablereactions', 'local_reactions'));
-    $mform->addHelpButton('local_reactions_enabled', 'enablereactions', 'local_reactions');
-
-    $children = [
-        'local_reactions_compactview_list'         => 'compactview_list',
-        'local_reactions_compactview_discuss'      => 'compactview_discuss',
-        'local_reactions_allowmultiplereactions'   => 'allowmultiplereactions',
-        'local_reactions_onlypeerreactionsgrading' => 'onlypeerreactionsgrading',
-    ];
-    foreach ($children as $fieldname => $stringkey) {
+    $elements = local_reactions_get_form_elements($modulename);
+    $parentfield = array_key_first($elements);
+    foreach ($elements as $fieldname => $stringkey) {
         $mform->addElement('checkbox', $fieldname, get_string($stringkey, 'local_reactions'));
         $mform->addHelpButton($fieldname, $stringkey, 'local_reactions');
-        $mform->hideIf($fieldname, 'local_reactions_enabled');
+        if ($fieldname !== $parentfield) {
+            $mform->hideIf($fieldname, $parentfield);
+        }
     }
 
     $cmid = (int) ($cm->coursemodule ?? 0);
-    $record = $cmid ? \local_reactions\manager::get_forum_config($cmid) : null;
-    local_reactions_apply_form_defaults($mform, $record);
+    $record = $cmid ? \local_reactions\manager::get_module_config($cmid) : null;
+    local_reactions_apply_form_defaults($mform, $record, $modulename);
 
-    // Lock the "allow multiple" checkbox when the forum is already in multi-reaction
+    // Lock the "allow multiple" checkbox when the activity is already in multi-reaction
     // mode and reactions exist. Once reactions are present you cannot downgrade.
     $multipleenabled = !$record || !empty($record->allowmultiplereactions);
-    if ($cmid && $multipleenabled && \local_reactions\manager::forum_has_reactions($cm->instance)) {
+    if ($cmid && $multipleenabled && local_reactions_instance_has_reactions($modulename, (int) $cm->instance)) {
         $mform->hardFreeze('local_reactions_allowmultiplereactions');
     }
 }
@@ -97,16 +155,17 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
  *
  * @param MoodleQuickForm $mform
  * @param \stdClass|null $record Existing local_reactions_enabled row or null.
+ * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
  */
-function local_reactions_apply_form_defaults($mform, ?stdClass $record): void {
-    foreach (local_reactions_get_form_fieldmap() as $formfield => [$dbfield, $newdefault]) {
+function local_reactions_apply_form_defaults($mform, ?stdClass $record, string $modulename = 'forum'): void {
+    foreach (local_reactions_get_form_fieldmap($modulename) as $formfield => [$dbfield, $newdefault]) {
         $value = ($record && isset($record->$dbfield)) ? (!empty($record->$dbfield) ? 1 : 0) : $newdefault;
         $mform->setDefault($formfield, $value);
     }
 }
 
 /**
- * Save the per-forum reactions setting after module create/update.
+ * Save the per-activity reactions settings after module create/update.
  *
  * @param stdClass $data Data from the form submission.
  * @param stdClass $course The course (unused; required by the hook signature).
@@ -116,18 +175,18 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     global $DB;
     unset($course);
 
-    if (!get_config('local_reactions', 'enabled')) {
+    $supported = local_reactions_get_supported_modules();
+    $modulename = $data->modulename ?? '';
+    if (!isset($supported[$modulename])) {
         return $data;
     }
-
-    // Only process forums.
-    if (!isset($data->modulename) || $data->modulename !== 'forum') {
+    if (!get_config('local_reactions', $supported[$modulename])) {
         return $data;
     }
 
     $cmid = (int) $data->coursemodule;
     $fields = ['cmid' => $cmid];
-    foreach (local_reactions_get_form_fieldmap() as $formfield => $mapping) {
+    foreach (local_reactions_get_form_fieldmap($modulename) as $formfield => $mapping) {
         $dbfield = $mapping[0];
         $fields[$dbfield] = !empty($data->$formfield) ? 1 : 0;
     }
@@ -138,6 +197,7 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     $fields['allowmultiplereactions'] = local_reactions_enforce_multiple_safety(
         $existing,
         (int) $fields['allowmultiplereactions'],
+        $modulename,
         (int) ($data->instance ?? 0)
     );
 
@@ -149,25 +209,26 @@ function local_reactions_coursemodule_edit_post_actions($data, $course): stdClas
     }
 
     // Keep the per-request cache consistent with what we just wrote.
-    \local_reactions\manager::clear_forum_config_cache($cmid);
+    \local_reactions\manager::clear_module_config_cache($cmid);
 
     return $data;
 }
 
 /**
  * Return the effective allowmultiplereactions value, forcing it back on when an existing
- * record was multi-reaction and the forum already has reactions (cannot downgrade).
+ * record was multi-reaction and the activity already has reactions (cannot downgrade).
  *
  * @param \stdClass|false $existing Existing local_reactions_enabled row, or false when none.
  * @param int $requested The value submitted by the form (0 or 1).
- * @param int $forumid Forum instance ID from the form data.
+ * @param string $modulename The module name, e.g. 'forum' or 'data'.
+ * @param int $instanceid Activity instance ID from the form data.
  * @return int 0 or 1.
  */
-function local_reactions_enforce_multiple_safety($existing, int $requested, int $forumid): int {
+function local_reactions_enforce_multiple_safety($existing, int $requested, string $modulename, int $instanceid): int {
     if (!$existing || empty($existing->allowmultiplereactions) || $requested) {
         return $requested;
     }
-    if ($forumid && \local_reactions\manager::forum_has_reactions($forumid)) {
+    if (local_reactions_instance_has_reactions($modulename, $instanceid)) {
         return 1;
     }
     return $requested;

@@ -1,7 +1,7 @@
 @local @local_reactions @javascript
-Feature: Backup and restore forum with reactions
-  As a teacher I want to duplicate or backup/restore a forum that has reactions
-  and verify that settings and reaction data are preserved.
+Feature: Backup and restore activities with reactions
+  As a teacher I want to duplicate or backup/restore a forum or database activity that has
+  reactions and verify that settings and reaction data are preserved.
 
   Background:
     Given the following "users" exist:
@@ -18,13 +18,28 @@ Feature: Backup and restore forum with reactions
     And the following "activities" exist:
       | activity | name       | course | type    | idnumber |
       | forum    | Test Forum | C1     | general | forum1   |
+      | data     | Test DB    | C1     |         | data1    |
+    And the following "mod_data > fields" exist:
+      | database | type | name  |
+      | data1    | text | Title |
+    And the following "mod_data > entries" exist:
+      | database | user     | Title    |
+      | data1    | student1 | DB entry |
     # Enable the reactions plugin globally.
     And the following config values are set as admin:
-      | enabled | 1 | local_reactions |
-    # Enable reactions for the forum.
+      | enabled     | 1 | local_reactions |
+      | enableddata | 1 | local_reactions |
+    # Enable reactions for the forum and the database activity.
     And the following "local_reactions > enabled forums" exist:
       | forum      | course | enabled |
       | Test Forum | C1     | 1       |
+    And the following "local_reactions > enabled databases" exist:
+      | data    | course | enabled |
+      | Test DB | C1     | 1       |
+    And the following "local_reactions > reactions" exist:
+      | user     | dataentry | emoji    |
+      | teacher1 | DB entry  | thumbsup |
+      | student1 | DB entry  | heart    |
     # Student creates a discussion.
     And the following "mod_forum > discussions" exist:
       | user     | forum  | name         | message              |
@@ -94,6 +109,30 @@ Feature: Backup and restore forum with reactions
     When I press "Save and return to course"
     And I follow "Test Forum"
     And I follow "Student Post"
+    And I wait for reactions to load
+    Then the "thumbsup" reaction count should be 1
+    And the "heart" reaction count should be 1
+
+  Scenario: Backup and restore a course preserves database activity reactions
+    # Disable async backup for Behat.
+    Given the following config values are set as admin:
+      | enableasyncbackup | 0 |
+    And I log in as "admin"
+    And I backup "Course 1" course using this options:
+      | Initial      | Include enrolled users | 1                  |
+      | Confirmation | Filename               | test_db_backup.mbz |
+    And I restore "test_db_backup.mbz" backup into a new course using this options:
+      | Schema | Course name       | Course 1 db restored |
+      | Schema | Course short name | C1DBR                |
+    Then I should see "Test DB"
+    # The per-activity reactions setting came across.
+    When I follow "Test DB"
+    And I navigate to "Settings" in current page administration
+    And I expand all fieldsets
+    Then the field "Enable emoji reactions" matches value "1"
+    # And so did the reactions themselves, remapped onto the restored entry.
+    When I press "Save and return to course"
+    And I follow "Test DB"
     And I wait for reactions to load
     Then the "thumbsup" reaction count should be 1
     And the "heart" reaction count should be 1

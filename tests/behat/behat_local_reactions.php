@@ -54,6 +54,28 @@ class behat_local_reactions extends behat_base {
     }
 
     /**
+     * Check exactly how many reactions bars are rendered on the page.
+     *
+     * Core's counting steps take either an XPath node type or a text string, neither of which
+     * can count elements identified by a data-region attribute.
+     *
+     * @Then :count reactions bars should be rendered
+     * @param int $count The expected number of reactions bars.
+     */
+    public function reactions_bars_should_be_rendered(int $count): void {
+        $nodes = $this->getSession()->getPage()->findAll('css', '[data-region="reactions-bar"]');
+        $visible = array_filter($nodes, function ($node) {
+            return $node->isVisible();
+        });
+        if ($count !== count($visible)) {
+            throw new ExpectationException(
+                'Found ' . count($visible) . ' reactions bars. Expected ' . $count . '.',
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
      * Check that an emoji pill shows a specific count.
      *
      * @Then the :emoji reaction count should be :count

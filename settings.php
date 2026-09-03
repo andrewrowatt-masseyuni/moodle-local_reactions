@@ -35,6 +35,13 @@ if ($hassiteconfig) {
     ));
 
     $settings->add(new admin_setting_configcheckbox(
+        'local_reactions/enableddata',
+        get_string('settings:enableddata', 'local_reactions'),
+        get_string('settings:enableddata_desc', 'local_reactions'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
         'local_reactions/enabledblog',
         get_string('settings:enabledblog', 'local_reactions'),
         get_string('settings:enabledblog_desc', 'local_reactions'),

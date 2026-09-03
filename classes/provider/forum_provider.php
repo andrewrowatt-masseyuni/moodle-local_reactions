@@ -61,7 +61,7 @@ class forum_provider implements content_provider {
         if (!$cm) {
             return null;
         }
-        $record = manager::get_forum_config($cm->id);
+        $record = manager::get_module_config($cm->id);
         if (!$record || !$record->enabled) {
             return null;
         }
@@ -191,7 +191,7 @@ class forum_provider implements content_provider {
             return null;
         }
         $cm = get_coursemodule_from_instance('forum', $forum->get_id(), 0, false, MUST_EXIST);
-        $config = manager::get_forum_config($cm->id);
+        $config = manager::get_module_config($cm->id);
         if (!$config || !$config->enabled) {
             return null;
         }

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.0
+- Reactions are now available on Database activity entries, on both the list view and the single view. Enable them site-wide with the new **Enable reactions for Database activities** setting, then per activity on the database activity settings form.
+- Database activities using custom templates or presets can place the bar themselves by adding `<div data-region="local-reactions-anchor" data-recordid="##id##"></div>` to the template.
+- Backup, restore, privacy export/delete and entry-deletion cleanup all cover database activity reactions.
+- Thanks for the suggestion Michelle Doyle.
+
 ## v1.7.1
 - Added site-wide "Enable multiple reactions per-user per blog post" setting (off by default). The setting locks in the "on" position once a user has stacked more than one emoji on a single blog entry.
 

@@ -59,7 +59,7 @@ class report {
             if (!empty($cm->deletioninprogress)) {
                 continue;
             }
-            $config = manager::get_forum_config($cm->id);
+            $config = manager::get_module_config($cm->id);
             if ($config && !empty($config->enabled)) {
                 $forumid = (int) $cm->instance;
                 $forumids[] = $forumid;

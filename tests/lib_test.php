@@ -34,4 +34,55 @@ final class lib_test extends \advanced_testcase {
     public function test_plugin_installed(): void {
         $this->assertNotEmpty(get_config('local_reactions', 'version'));
     }
+
+    /**
+     * The settings form offers the peer-grading option to forums only; every other field is shared.
+     *
+     * @covers ::local_reactions_get_form_elements
+     * @covers ::local_reactions_get_form_fieldmap
+     */
+    public function test_form_fields_differ_per_module(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/reactions/lib.php');
+
+        $forumfields = array_keys(local_reactions_get_form_fieldmap('forum'));
+        $datafields = array_keys(local_reactions_get_form_fieldmap('data'));
+
+        $this->assertContains('local_reactions_onlypeerreactionsgrading', $forumfields);
+        $this->assertNotContains('local_reactions_onlypeerreactionsgrading', $datafields);
+        $this->assertSame(
+            ['local_reactions_enabled', 'local_reactions_compactview_list',
+                'local_reactions_compactview_discuss', 'local_reactions_allowmultiplereactions'],
+            $datafields
+        );
+
+        // Every form element must have a label string and a matching help string.
+        foreach (['forum', 'data'] as $modulename) {
+            foreach (local_reactions_get_form_elements($modulename) as $stringkey) {
+                $this->assertTrue(
+                    get_string_manager()->string_exists($stringkey, 'local_reactions'),
+                    "Missing string '{$stringkey}'"
+                );
+                $this->assertTrue(
+                    get_string_manager()->string_exists($stringkey . '_help', 'local_reactions'),
+                    "Missing string '{$stringkey}_help'"
+                );
+            }
+        }
+    }
+
+    /**
+     * Only the module types the plugin supports get the settings section.
+     *
+     * @covers ::local_reactions_get_supported_modules
+     */
+    public function test_supported_modules_map_to_admin_settings(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/reactions/lib.php');
+
+        $this->assertSame(
+            ['forum' => 'enabled', 'data' => 'enableddata'],
+            local_reactions_get_supported_modules()
+        );
+    }
 }

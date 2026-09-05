@@ -16,6 +16,7 @@ This local plugin adds an emoji reaction bar to forum posts, database activity e
 -   Anonymous display (counts only), with full user logging in the database
 -   Works with dynamically loaded inline replies via MutationObserver
 -   Includes a course-wide Reactions report (forums only)
+-   Optional Moodle App support for forum posts (see below)
 -   Tested on Moodle 4.5 Boost theme and Snap theme
 
 ## Installing via uploaded ZIP file
@@ -65,6 +66,29 @@ Database activity entries are rendered through templates you can edit, so the pl
     The `##id##` tag is replaced by Moodle with the entry's ID. Add the anchor to the list template, the single template, or both.
 
 If a template is customised without an anchor and no longer contains the default entry wrapper, reactions are simply not shown for that view.
+
+## Moodle App
+
+Reactions are shown on forum posts in the Moodle App as well as on the web. Nothing extra needs
+installing: make sure *Site administration \> Mobile app \> Mobile settings \> Enable web services
+for mobile devices* is on, which it is by default.
+
+The app caches plugin code at login, so after upgrading this plugin users need to **log out and
+back in** before reactions appear.
+
+### Scope and limitations
+
+-   Forum posts only. Database activity entries and blog entries are web-only.
+-   The discussion list in the app shows no reaction summary; bars appear on posts inside a
+    discussion.
+-   Reacting requires a connection. Reactions are not available offline and are not prefetched.
+-   Administrators can switch the integration off under *Site administration \> Mobile app \>
+    Mobile features* by disabling `sitePlugin_local_reactions_reactions`.
+-   The app gives plugins no supported way to add anything to a forum post, so this works by
+    watching the app's DOM and inserting bars into rendered posts. That markup is not something
+    Moodle guarantees between app releases. The code is written defensively — if a future app
+    version changes it, reactions stop appearing rather than anything breaking — but it does mean
+    the integration needs re-checking when the app has a major update.
 
 ## Capabilities
 

@@ -1,0 +1,123 @@
+/*
+ * Moodle App styles for Reactions.
+ *
+ * Trimmed from the web styles.css, keeping the same class names so both surfaces look alike.
+ * This file is injected into the whole app, so every rule is scoped under .local-reactions-bar.
+ * Bump the styles version in db/mobile.php after editing, or the app keeps its cached copy.
+ */
+
+.local-reactions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 20px 4px;
+}
+
+.local-reactions-bar .local-reactions-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 4px 8px;
+    border: 1px solid var(--gray-300, #d1d1d1);
+    border-radius: 16px;
+    background: var(--gray-100, #f5f5f5);
+    color: var(--ion-text-color, #1f2328);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+}
+
+.local-reactions-bar .local-reactions-pill:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.local-reactions-bar .local-reactions-pill.local-reactions-selected {
+    background: var(--ion-color-primary-tint, #ddf4ff);
+    border-color: var(--ion-color-primary, #54aeff);
+}
+
+.local-reactions-bar .local-reactions-emoji {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.local-reactions-bar .local-reactions-count {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.local-reactions-bar .local-reactions-pill-compact .local-reactions-compact-emojis {
+    font-size: 1rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    margin-right: 2px;
+}
+
+.local-reactions-bar .local-reactions-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--gray-400, #b3b3b3);
+    border-radius: 16px;
+    background: var(--gray-200, #e8e8e8);
+    color: var(--ion-text-color, #1f2328);
+    cursor: pointer;
+}
+
+.local-reactions-bar .local-reactions-picker-wrapper {
+    position: relative;
+    display: inline-flex;
+}
+
+/*
+ * Anchored to the trigger rather than the viewport: unlike the web page, the app scrolls the
+ * post inside ion-content, so a fixed picker would detach from its button.
+ */
+.local-reactions-bar .local-reactions-picker {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    z-index: 10;
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--gray-300, #d1d1d1);
+    border-radius: 8px;
+    background: var(--ion-background-color, #fff);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
+}
+
+/*
+ * display:flex above would otherwise beat the browser's own [hidden] rule, leaving every picker
+ * permanently open. On the web Bootstrap's reboot handles this; the app has no such reset.
+ */
+.local-reactions-bar .local-reactions-picker[hidden] {
+    display: none;
+}
+
+.local-reactions-bar .local-reactions-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.local-reactions-bar .local-reactions-picker-btn.local-reactions-selected {
+    background: var(--ion-color-primary-tint, #ddf4ff);
+    border-color: var(--ion-color-primary, #54aeff);
+}

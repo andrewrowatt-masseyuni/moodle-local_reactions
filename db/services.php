@@ -17,6 +17,10 @@
 /**
  * Web service definitions for local_reactions.
  *
+ * The functions the Moodle App needs are also published to MOODLE_OFFICIAL_MOBILE_SERVICE.
+ * Note that external_update_services() only wires those up during an upgrade, so any change
+ * here must be accompanied by a version bump in version.php.
+ *
  * @package    local_reactions
  * @copyright  2026 Andrew Rowatt <A.J.Rowatt@massey.ac.nz>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -31,6 +35,7 @@ $functions = [
         'type' => 'write',
         'ajax' => true,
         'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
     'local_reactions_get_reactions' => [
         'classname' => 'local_reactions\external\get_reactions',
@@ -38,6 +43,7 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
     'local_reactions_get_reactions_for_grading' => [
         'classname' => 'local_reactions\external\get_reactions_for_grading',
@@ -52,5 +58,14 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
+    'local_reactions_get_item_settings' => [
+        'classname' => 'local_reactions\external\get_item_settings',
+        'description' => 'Get the reactions configuration and emoji set for a list of items',
+        'type' => 'read',
+        'ajax' => true,
+        'loginrequired' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
 ];

@@ -4,6 +4,7 @@
 - Reactions now appear on forum posts in the Moodle App. Nothing extra to install; users need to log out and back in after the upgrade so the app picks up the plugin. See the Moodle App section of the README for the current limitations (forum posts only, no offline support).
 - The `local_reactions_toggle_reaction`, `local_reactions_get_reactions` and `local_reactions_get_discussion_reactions` web services are now available to the Moodle App service.
 - Added the `local_reactions_get_item_settings` web service, which returns the reactions configuration and the site's emoji set for a list of items.
+- Thanks for the suggestion Robert Schrenk.
 
 ## v1.8.0
 - Reactions are now available on Database activity entries, on both the list view and the single view. Enable them site-wide with the new **Enable reactions for Database activities** setting, then per activity on the database activity settings form.

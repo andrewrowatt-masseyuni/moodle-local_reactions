@@ -70,7 +70,10 @@ class forum_provider implements content_provider {
             return null;
         }
 
-        $isdiscussionlist = ($page->pagetype === 'mod-forum-view');
+        // A "single simple discussion" forum has no discussion list: view.php renders its one
+        // discussion inline, using the same post markup discuss.php uses, so that page has to
+        // behave as a discussion page rather than as the list.
+        $isdiscussionlist = ($page->pagetype === 'mod-forum-view') && !self::is_single_discussion_forum($page);
 
         $decision = new \stdClass();
         $decision->pagetype = $page->pagetype;
@@ -102,10 +105,15 @@ class forum_provider implements content_provider {
                 'extra' => 'height:26px;margin:calc(0.5rem + 2px) 0 4px 0;',
             ],
         ];
-        if (!isset($skeletons[$decision->pagetype])) {
+        // A single simple discussion forum draws posts on mod-forum-view, so it takes the
+        // discussion page's skeleton rather than the discussion list one.
+        $skeletonkey = ($decision->pagetype === 'mod-forum-view' && !$decision->isdiscussionlist)
+            ? 'mod-forum-discuss'
+            : $decision->pagetype;
+        if (!isset($skeletons[$skeletonkey])) {
             return null;
         }
-        $s = $skeletons[$decision->pagetype];
+        $s = $skeletons[$skeletonkey];
         $width = !empty($decision->compactview) ? '80px' : '52px';
         return $s['selector'] . '{'
             . 'content:\'\';'
@@ -153,6 +161,20 @@ class forum_provider implements content_provider {
     public function get_context_for_item(int $itemid): ?\context {
         $forum = $this->resolve_forum_from_post($itemid);
         return $forum ? $forum->get_context() : null;
+    }
+
+    /**
+     * Whether the page belongs to a "single simple discussion" forum.
+     *
+     * The forum's type is not part of modinfo, so it comes from the activity record. Forum pages
+     * set that record themselves, which keeps this free of an extra query in practice.
+     *
+     * @param \moodle_page $page A page whose course module is a forum.
+     * @return bool
+     */
+    private static function is_single_discussion_forum(\moodle_page $page): bool {
+        $forumrecord = $page->activityrecord;
+        return !empty($forumrecord) && $forumrecord->type === 'single';
     }
 
     /**

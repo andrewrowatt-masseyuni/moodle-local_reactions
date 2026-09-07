@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.9.1
+- Added support for "A single simple discussion" forum type.
+- Thanks to Raymond Sii for requesting this.
+
 ## v1.9.0
 - Reactions now appear on forum posts in the Moodle App. Nothing extra to install; users need to log out and back in after the upgrade so the app picks up the plugin. See the Moodle App section of the README for the current limitations (forum posts only, no offline support).
 - The `local_reactions_toggle_reaction`, `local_reactions_get_reactions` and `local_reactions_get_discussion_reactions` web services are now available to the Moodle App service.

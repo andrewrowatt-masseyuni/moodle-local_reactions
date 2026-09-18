@@ -20,6 +20,10 @@
     A single compact pill showing all reacted emojis followed by total count.
     Facebook/WhatsApp style display.
 
+    The wrapper span carries the "who reacted" tooltip; see the pill template for why it cannot go
+    on the button. `allnames` covers everyone who reacted with any emoji, matching what this one
+    pill counts, and is empty unless the activity has "Show who reacted" turned on.
+
     Example context (json):
     {
         "hasanycount": true,
@@ -29,19 +33,24 @@
             {"unicode": "\u2764\ufe0f"}
         ],
         "selected": true,
-        "canreact": true
+        "canreact": true,
+        "allnames": "You, Jenny (Teacher), Andrew, and 2 others"
     }
 }}
 {{#hasanycount}}
-    <button
-        type="button"
-        class="local-reactions-pill local-reactions-pill-compact{{#selected}} local-reactions-selected{{/selected}}"
-        data-action="open-picker"
-        data-total-count="{{totalcount}}"
-        aria-label="{{totalcount}} {{#str}} totalreactions, local_reactions {{/str}}"
-        {{^canreact}}disabled{{/canreact}}
+    <span class="local-reactions-pill-wrapper"
+        {{#allnames}}data-toggle="tooltip" data-placement="top" title="{{.}}"{{/allnames}}
     >
-        <span class="local-reactions-compact-emojis" aria-hidden="true">{{#reactedEmojis}}{{unicode}}{{/reactedEmojis}}</span>
-        <span class="local-reactions-count" data-region="reaction-count">{{totalcount}}</span>
-    </button>
+        <button
+            type="button"
+            class="local-reactions-pill local-reactions-pill-compact{{#selected}} local-reactions-selected{{/selected}}"
+            data-action="open-picker"
+            data-total-count="{{totalcount}}"
+            aria-label="{{totalcount}} {{#str}} totalreactions, local_reactions {{/str}}{{#allnames}}. {{.}}{{/allnames}}"
+            {{^canreact}}disabled{{/canreact}}
+        >
+            <span class="local-reactions-compact-emojis" aria-hidden="true">{{#reactedEmojis}}{{unicode}}{{/reactedEmojis}}</span>
+            <span class="local-reactions-count" data-region="reaction-count">{{totalcount}}</span>
+        </button>
+    </span>
 {{/hasanycount}}

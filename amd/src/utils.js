@@ -87,6 +87,10 @@ export const computeDiffs = (cachedData, freshData) => {
 /**
  * Build Mustache template context from reaction data.
  *
+ * Each count may carry a `names` string listing who reacted, and the data may carry an `allnames`
+ * string for the compact pill. Both are absent on cached data, which is why a cache render shows
+ * counts with no tooltip until the live data replaces it.
+ *
  * @param {Object} data Reaction data with counts array.
  * @param {Object} emojis Map of shortcode to unicode from config.
  * @param {Object} [options={}] Options.
@@ -97,8 +101,10 @@ export const computeDiffs = (cachedData, freshData) => {
  */
 export const buildTemplateContext = (data, emojis, {canreact = false, compactview = false, userreactions = []} = {}) => {
     const countsMap = {};
+    const namesMap = {};
     (data?.counts || []).forEach((c) => {
         countsMap[c.emoji] = c.count;
+        namesMap[c.emoji] = c.names || '';
     });
 
     const buttons = [];
@@ -116,6 +122,7 @@ export const buildTemplateContext = (data, emojis, {canreact = false, compactvie
             hascount: count > 0,
             selected: isSelected,
             canreact: canreact,
+            names: namesMap[shortcode] || '',
         });
         if (count > 0) {
             totalCount += count;
@@ -134,6 +141,7 @@ export const buildTemplateContext = (data, emojis, {canreact = false, compactvie
         totalcount: totalCount,
         reactedEmojis: reactedEmojis,
         selected: hasAnySelected,
+        allnames: data?.allnames || '',
     };
 };
 

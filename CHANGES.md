@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.10.0
+- Added a per-activity **Show who reacted (first names only)** setting for forums and database activities, off by default. With it on, each reaction pill carries a tooltip naming the people behind it, most recent reaction first — for example `You, Jenny (Teacher), Andrew, Bancy, and 2 others`.
+- Thanks to evertonaltas for requesting this.
+- Students see at most three other names. Users with the new `local/reactions:viewallreactornames` capability (teachers and managers by default) see up to the new site-wide **Maximum names shown to teachers** setting, which defaults to 10.
+- Names are shown on forum posts, the forum discussion list, database activity entries and the whole-forum grading screen, where they honour **Only show peer reactions when grading**. Names are not shown in the Moodle App.
+- Fixed a `get_role_users()` developer warning when collecting the students of a course for peer-reaction filtering, which also made that lookup fall back to one query per student role.
+
+## v1.10.0
+- Added a per-activity **Show who reacted (first names only)** setting for forums and database activities, off by default. With it on, each reaction pill carries a tooltip naming the people behind it, most recent reaction first — for example `You, Jenny (Teacher), Andrew, Bancy, and 2 others`.
+- Students see at most three other names. Users with the new `local/reactions:viewallreactornames` capability (teachers and managers by default) see up to the new site-wide **Maximum names shown to teachers** setting, which defaults to 10.
+- Names are shown on forum posts, the forum discussion list, database activity entries and the whole-forum grading screen, where they honour **Only show peer reactions when grading**. Names are not shown in the Moodle App.
+- Fixed a `get_role_users()` developer warning when collecting the students of a course for peer-reaction filtering, which also made that lookup fall back to one query per student role.
+
 ## v1.9.1
 - Added support for "A single simple discussion" forum type.
 - Thanks to Raymond Sii for requesting this.

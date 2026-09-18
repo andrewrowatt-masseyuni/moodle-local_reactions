@@ -171,6 +171,7 @@ class local_reactions_generator extends component_generator_base {
             ? (int) $data['allowmultiplereactions'] : 1;
         $record->onlypeerreactionsgrading = isset($data['onlypeerreactionsgrading'])
             ? (int) $data['onlypeerreactionsgrading'] : 1;
+        $record->shownames = isset($data['shownames']) ? (int) $data['shownames'] : 0;
 
         $existing = $DB->get_record('local_reactions_enabled', ['cmid' => $cmid]);
         if ($existing) {

@@ -130,6 +130,90 @@ class behat_local_reactions extends behat_base {
     }
 
     /**
+     * Check the "who reacted" tooltip text on an emoji pill.
+     *
+     * @Then the :emoji reaction should list :names
+     * @param string $emoji The emoji shortcode (e.g. thumbsup, heart).
+     * @param string $names The expected tooltip text.
+     */
+    public function the_reaction_should_list(string $emoji, string $names): void {
+        $actual = $this->get_pill_tooltip($this->pill_wrapper_xpath("@data-emoji='{$emoji}'"));
+        if ($actual !== $names) {
+            throw new ExpectationException(
+                "The '{$emoji}' reaction tooltip reads '{$actual}'. Expected '{$names}'.",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Check the "who reacted" tooltip text on the compact pill.
+     *
+     * @Then the compact reaction pill should list :names
+     * @param string $names The expected tooltip text.
+     */
+    public function the_compact_reaction_should_list(string $names): void {
+        $xpath = $this->pill_wrapper_xpath("contains(@class,'local-reactions-pill-compact')");
+        $actual = $this->get_pill_tooltip($xpath);
+        if ($actual !== $names) {
+            throw new ExpectationException(
+                "The compact reaction tooltip reads '{$actual}'. Expected '{$names}'.",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Check that an emoji pill carries no "who reacted" tooltip at all.
+     *
+     * @Then the :emoji reaction should name nobody
+     * @param string $emoji The emoji shortcode (e.g. thumbsup, heart).
+     */
+    public function the_reaction_should_list_nobody(string $emoji): void {
+        $actual = $this->get_pill_tooltip($this->pill_wrapper_xpath("@data-emoji='{$emoji}'"));
+        if ($actual !== '') {
+            throw new ExpectationException(
+                "The '{$emoji}' reaction should carry no tooltip but reads '{$actual}'.",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * XPath for the tooltip host span around a pill, scoped to a bar showing live data.
+     *
+     * Scoping to data-source="live" keeps the step from reading a bar that is still showing
+     * cached counts, which deliberately carry no names.
+     *
+     * @param string $buttoncondition An XPath predicate identifying the button inside the wrapper.
+     * @return string The XPath expression.
+     */
+    protected function pill_wrapper_xpath(string $buttoncondition): string {
+        return "//div[@data-region='reactions-bar'][@data-source='live']"
+            . "//span[contains(@class,'local-reactions-pill-wrapper')]"
+            . "[.//button[{$buttoncondition}]]";
+    }
+
+    /**
+     * Read the tooltip text off a pill wrapper.
+     *
+     * Bootstrap moves the title into data-original-title once it has instantiated the tooltip, so
+     * both attributes have to be considered.
+     *
+     * @param string $xpath XPath locating the wrapper span.
+     * @return string The tooltip text, or an empty string when there is none.
+     */
+    protected function get_pill_tooltip(string $xpath): string {
+        $this->ensure_element_exists($xpath, 'xpath_element');
+        $node = $this->find('xpath_element', $xpath);
+        $title = $node->getAttribute('data-original-title');
+        if ($title === null || $title === '') {
+            $title = $node->getAttribute('title');
+        }
+        return (string) $title;
+    }
+
+    /**
      * Check that a specific emoji pill does not exist on the page.
      *
      * @Then I should not see the :emoji reaction pill

@@ -52,7 +52,8 @@ final class lib_test extends \advanced_testcase {
         $this->assertNotContains('local_reactions_onlypeerreactionsgrading', $datafields);
         $this->assertSame(
             ['local_reactions_enabled', 'local_reactions_compactview_list',
-                'local_reactions_compactview_discuss', 'local_reactions_allowmultiplereactions'],
+                'local_reactions_compactview_discuss', 'local_reactions_allowmultiplereactions',
+                'local_reactions_shownames'],
             $datafields
         );
 

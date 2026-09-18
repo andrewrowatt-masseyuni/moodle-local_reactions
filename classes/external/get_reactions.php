@@ -22,6 +22,7 @@ use core_external\external_single_structure;
 use core_external\external_multiple_structure;
 use core_external\external_value;
 use local_reactions\manager;
+use local_reactions\reactor_names;
 use local_reactions\provider_registry;
 
 /**
@@ -92,6 +93,16 @@ class get_reactions extends external_api {
             $USER->id
         );
 
+        // Empty unless the activity has "Show who reacted" turned on, in which case each pill
+        // carries the first names of the people behind its count.
+        $names = reactor_names::for_items(
+            $params['component'],
+            $params['itemtype'],
+            $params['itemids'],
+            $USER->id,
+            $context
+        );
+
         $items = [];
         foreach ($reactions as $itemid => $data) {
             $counts = [];
@@ -99,12 +110,14 @@ class get_reactions extends external_api {
                 $counts[] = [
                     'emoji' => $emoji,
                     'count' => $count,
+                    'names' => $names[$itemid]['emoji'][$emoji] ?? '',
                 ];
             }
             $items[] = [
                 'itemid' => $itemid,
                 'userreactions' => $data['userreactions'],
                 'counts' => $counts,
+                'allnames' => $names[$itemid]['all'] ?? '',
             ];
         }
 
@@ -128,7 +141,15 @@ class get_reactions extends external_api {
                         new external_single_structure([
                             'emoji' => new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode'),
                             'count' => new external_value(PARAM_INT, 'Reaction count'),
+                            'names' => new external_value(
+                                PARAM_TEXT,
+                                'Who reacted with this emoji, or empty when names are not shown here'
+                            ),
                         ])
+                    ),
+                    'allnames' => new external_value(
+                        PARAM_TEXT,
+                        'Who reacted with any emoji, for the compact pill; empty when names are not shown here'
                     ),
                 ])
             ),

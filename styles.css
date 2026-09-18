@@ -10,6 +10,12 @@
     gap: 3px;
 }
 
+/* Tooltip host around each pill: a disabled button never receives the hover events a
+   Bootstrap tooltip needs, so the tooltip lives on this wrapper instead. */
+.local-reactions-pill-wrapper {
+    display: inline-flex;
+}
+
 /* Reaction count pills (shown for emoji with counts) */
 .local-reactions-pill {
     display: inline-flex;

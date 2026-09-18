@@ -53,6 +53,7 @@ function local_reactions_get_form_elements(string $modulename): array {
             'local_reactions_compactview_list'       => 'compactview_datalist',
             'local_reactions_compactview_discuss'    => 'compactview_datasingle',
             'local_reactions_allowmultiplereactions' => 'allowmultiplereactionsdata',
+            'local_reactions_shownames'              => 'shownamesdata',
         ];
     }
     return [
@@ -61,14 +62,15 @@ function local_reactions_get_form_elements(string $modulename): array {
         'local_reactions_compactview_discuss'      => 'compactview_discuss',
         'local_reactions_allowmultiplereactions'   => 'allowmultiplereactions',
         'local_reactions_onlypeerreactionsgrading' => 'onlypeerreactionsgrading',
+        'local_reactions_shownames'                => 'shownames',
     ];
 }
 
 /**
  * Map of form field => [db field on local_reactions_enabled, default for new activities].
  *
- * Display toggles default off; multi-reaction and peer-grading default on. Fields the module
- * does not offer are left out, so saving never overwrites them.
+ * Display toggles and the reactor-name list default off; multi-reaction and peer-grading default
+ * on. Fields the module does not offer are left out, so saving never overwrites them.
  *
  * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
  * @return array<string, array{0: string, 1: int}>
@@ -80,6 +82,7 @@ function local_reactions_get_form_fieldmap(string $modulename = 'forum'): array 
         'local_reactions_compactview_discuss'      => ['compactview_discuss', 0],
         'local_reactions_allowmultiplereactions'   => ['allowmultiplereactions', 1],
         'local_reactions_onlypeerreactionsgrading' => ['onlypeerreactionsgrading', 1],
+        'local_reactions_shownames'                => ['shownames', 0],
     ];
     return array_intersect_key($fieldmap, local_reactions_get_form_elements($modulename));
 }

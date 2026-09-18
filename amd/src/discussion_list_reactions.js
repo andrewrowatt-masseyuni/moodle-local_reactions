@@ -118,6 +118,24 @@ const insertSkeletons = (rows) => {
 };
 
 /**
+ * Whether fresh web service data for one discussion carries reactor names.
+ *
+ * The IndexedDB cache deliberately holds counts only — names are personal data and go stale — so a
+ * bar rendered from cache never has tooltips on its pills. When the live data does carry names the
+ * bar has to be rebuilt even though the counts came back identical, or the cached, tooltip-less
+ * markup would survive the whole visit.
+ *
+ * @param {Object} data Reaction data from the web service.
+ * @returns {boolean} True when there is a name list to render.
+ */
+const carriesNames = (data) => {
+    if (data.allnames) {
+        return true;
+    }
+    return (data.counts || []).some((count) => count.names);
+};
+
+/**
  * Remove all remaining skeleton placeholders from the page.
  */
 const removeSkeletons = () => {
@@ -228,10 +246,10 @@ const loadDiscussionReactions = async() => {
             if (cachedDiscussionIds.has(discussionId)) {
                 // This discussion was rendered from cache - compute diffs and re-render with animation.
                 const diffs = computeDiffs(cachedDataMap[discussionId], freshData);
-                if (diffs.hasChanges) {
+                if (diffs.hasChanges || carriesNames(freshData)) {
                     await rerenderBarWithAnimation(discussionId, freshData, diffs);
                 } else {
-                    // No count changes - just update data-source to live.
+                    // No count changes and no names to add - just update data-source to live.
                     const row = document.querySelector(
                         `[data-region="discussion-list-item"][data-discussionid="${discussionId}"]`
                     );

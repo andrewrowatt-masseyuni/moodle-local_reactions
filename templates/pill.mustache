@@ -22,6 +22,11 @@
 
     Context is a single button object from the buttons array.
 
+    The pill is wrapped in a span so that `names` can hang a Bootstrap tooltip off an element that
+    is never disabled — a disabled button receives no hover events, and read-only pills (discussion
+    list, grading panel) are always disabled. `names` is empty unless the activity has "Show who
+    reacted" turned on, and no tooltip is emitted then.
+
     Example context (json):
     {
         "shortcode": "thumbsup",
@@ -29,21 +34,26 @@
         "count": 3,
         "hascount": true,
         "selected": true,
-        "canreact": true
+        "canreact": true,
+        "names": "You, Jenny (Teacher), Andrew, and 2 others"
     }
 }}
 {{#hascount}}
-    <button
-        type="button"
-        class="local-reactions-pill{{#selected}} local-reactions-selected{{/selected}}"
-        data-action="toggle-reaction"
-        data-emoji="{{shortcode}}"
-        data-count="{{count}}"
-        aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
-        aria-label="{{unicode}} {{count}}"
-        {{^canreact}}disabled{{/canreact}}
+    <span class="local-reactions-pill-wrapper"
+        {{#names}}data-toggle="tooltip" data-placement="top" title="{{.}}"{{/names}}
     >
-        <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
-        <span class="local-reactions-count" data-region="reaction-count">{{count}}</span>
-    </button>
+        <button
+            type="button"
+            class="local-reactions-pill{{#selected}} local-reactions-selected{{/selected}}"
+            data-action="toggle-reaction"
+            data-emoji="{{shortcode}}"
+            data-count="{{count}}"
+            aria-pressed="{{#selected}}true{{/selected}}{{^selected}}false{{/selected}}"
+            aria-label="{{unicode}} {{count}}{{#names}}. {{.}}{{/names}}"
+            {{^canreact}}disabled{{/canreact}}
+        >
+            <span class="local-reactions-emoji" aria-hidden="true">{{unicode}}</span>
+            <span class="local-reactions-count" data-region="reaction-count">{{count}}</span>
+        </button>
+    </span>
 {{/hascount}}

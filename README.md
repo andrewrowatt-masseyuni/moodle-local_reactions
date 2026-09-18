@@ -3,7 +3,7 @@
 
 Modern emoji reactions for Moodle forum posts, database activity entries and blog entries.
 
-This local plugin adds an emoji reaction bar to forum posts, database activity entries and Moodle blog entries, allowing users to react with configurable emoji (e.g. thumbs up, heart, laugh). Reactions are anonymous — only aggregate counts are displayed. Users can select multiple emoji per item.
+This local plugin adds an emoji reaction bar to forum posts, database activity entries and Moodle blog entries, allowing users to react with configurable emoji (e.g. thumbs up, heart, laugh). Reactions are anonymous by default — only aggregate counts are displayed — but a forum or database activity can opt into showing the first names of the people behind each reaction. Users can select multiple emoji per item.
 
 ## Features
 
@@ -14,6 +14,7 @@ This local plugin adds an emoji reaction bar to forum posts, database activity e
 -   Separate site-wide admin settings for forums, database activities and blog entries
 -   Admin-configurable emoji set
 -   Anonymous display (counts only), with full user logging in the database
+-   Optional per-activity **Show who reacted (first names only)** tooltip, with separate name limits for students and teachers
 -   Works with dynamically loaded inline replies via MutationObserver
 -   Includes a course-wide Reactions report (forums only)
 -   Optional Moodle App support for forum posts (see below)
@@ -49,6 +50,25 @@ to complete the installation from the command line.
 2.  Enable the content types you want with the **Enable reactions for Forums**, **Enable reactions for Database activities** and **Enable reactions for Blog posts** settings.
 3.  Optionally customise the emoji set (comma-separated `shortcode:emoji` pairs, e.g. `thumbsup:👍,heart:❤️,laugh:😂`).
 4.  To enable reactions on a specific forum or database activity, edit its settings and tick **Enable emoji reactions** under the Reactions heading.
+
+## Show who reacted
+
+Reactions are anonymous unless a forum or database activity turns on **Show who reacted (first names only)** under the Reactions heading on its settings form. It is off by default.
+
+With it on, hovering a reaction shows the first names of the people behind it, most recent reaction first:
+
+```
+You, Jenny (Teacher), Andrew, Bancy, and 2 others
+```
+
+-   The viewer's own reaction is always named first as **You**, and never uses up one of the name slots.
+-   Anyone whose role in the course is not a student role is named with their role, for example *Jenny (Teacher)*.
+-   Students see at most three other names; everyone beyond that is summarised as *and X others*.
+-   Users holding the *See the full list of names of the users who reacted* capability (`local/reactions:viewallreactornames`, granted to teachers and managers by default) instead see up to **Maximum names shown to teachers** names, set site-wide under *Site administration \> Plugins \> Local plugins \> Reactions*.
+
+On the discussion list, where one pill sums up every post in a discussion, each person is named once at their most recent reaction — so the name list can be shorter than the count beside it. On the whole-forum grading screen the names honour **Only show peer reactions when grading** exactly as the counts do.
+
+Names are not shown in the Moodle App.
 
 ## Database activities
 

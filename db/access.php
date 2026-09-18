@@ -46,6 +46,15 @@ $capabilities = [
             'guest' => CAP_ALLOW,
         ],
     ],
+    'local/reactions:viewallreactornames' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'editingteacher' => CAP_ALLOW,
+            'teacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
     'local/reactions:viewreport' => [
         'captype' => 'read',
         'contextlevel' => CONTEXT_COURSE,

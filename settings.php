@@ -63,6 +63,14 @@ if ($hassiteconfig) {
     ));
 
     $settings->add(new admin_setting_configtext(
+        'local_reactions/shownameslimit',
+        get_string('settings:shownameslimit', 'local_reactions'),
+        get_string('settings:shownameslimit_desc', 'local_reactions'),
+        \local_reactions\reactor_names::DEFAULT_LIMIT,
+        PARAM_INT
+    ));
+
+    $settings->add(new admin_setting_configtext(
         'local_reactions/pollinterval',
         get_string('settings:pollinterval', 'local_reactions'),
         get_string('settings:pollinterval_desc', 'local_reactions'),

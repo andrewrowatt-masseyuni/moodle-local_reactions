@@ -68,5 +68,23 @@ function xmldb_local_reactions_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026041100, 'local', 'reactions');
     }
 
+    if ($oldversion < 2026091800) {
+        // Add shownames column to local_reactions_enabled.
+        $table = new xmldb_table('local_reactions_enabled');
+        $field = new xmldb_field(
+            'shownames',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2026091800, 'local', 'reactions');
+    }
+
     return true;
 }

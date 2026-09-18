@@ -328,7 +328,7 @@ class manager {
      * @param \context $context Module context for the forum.
      * @return bool True if peer-only filtering should be applied (defaults to true).
      */
-    private static function is_only_peer_grading_enabled(\context $context): bool {
+    public static function is_only_peer_grading_enabled(\context $context): bool {
         if (!($context instanceof \context_module)) {
             return true;
         }
@@ -445,7 +445,7 @@ class manager {
      * @param \context $context Any context (module or course); the course context is derived.
      * @return int[] List of student user IDs.
      */
-    private static function get_student_userids(\context $context): array {
+    public static function get_student_userids(\context $context): array {
         $coursecontext = $context->get_course_context(false);
         if (!$coursecontext) {
             return [];
@@ -456,11 +456,13 @@ class manager {
             return [];
         }
 
-        // Single query covering every student-archetype role at once.
-        $users = get_role_users(array_keys($studentroles), $coursecontext, true, 'u.id', 'u.id');
+        // Single query covering every student-archetype role at once. Passing several role IDs
+        // means the rows have to be keyed by ra.id, so the user ID needs its own alias; without
+        // that prefix get_role_users() warns and falls back to one query per role.
+        $users = get_role_users(array_keys($studentroles), $coursecontext, true, 'ra.id, u.id AS userid', 'u.id');
         $userids = [];
         foreach ($users as $u) {
-            $userids[(int) $u->id] = (int) $u->id;
+            $userids[(int) $u->userid] = (int) $u->userid;
         }
         return array_values($userids);
     }

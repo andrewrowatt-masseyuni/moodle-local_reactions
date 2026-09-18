@@ -22,6 +22,7 @@ use core_external\external_single_structure;
 use core_external\external_multiple_structure;
 use core_external\external_value;
 use local_reactions\manager;
+use local_reactions\reactor_names;
 
 /**
  * External function to get aggregated reactions for forum discussions.
@@ -62,6 +63,8 @@ class get_discussion_reactions extends external_api {
         array $discussionids,
         int $contextid
     ): array {
+        global $USER;
+
         $params = self::validate_parameters(self::execute_parameters(), [
             'component' => $component,
             'itemtype' => $itemtype,
@@ -79,6 +82,16 @@ class get_discussion_reactions extends external_api {
             $params['discussionids']
         );
 
+        // Empty unless the forum has "Show who reacted" turned on. These names span every post in
+        // the discussion and list each person once, so the list can be shorter than the count.
+        $names = reactor_names::for_discussions(
+            $params['component'],
+            $params['itemtype'],
+            $params['discussionids'],
+            $USER->id,
+            $context
+        );
+
         $items = [];
         foreach ($reactions as $discussionid => $data) {
             $counts = [];
@@ -86,11 +99,13 @@ class get_discussion_reactions extends external_api {
                 $counts[] = [
                     'emoji' => $emoji,
                     'count' => $count,
+                    'names' => $names[$discussionid]['emoji'][$emoji] ?? '',
                 ];
             }
             $items[] = [
                 'discussionid' => $discussionid,
                 'counts' => $counts,
+                'allnames' => $names[$discussionid]['all'] ?? '',
             ];
         }
 
@@ -111,7 +126,15 @@ class get_discussion_reactions extends external_api {
                         new external_single_structure([
                             'emoji' => new external_value(PARAM_ALPHANUMEXT, 'Emoji shortcode'),
                             'count' => new external_value(PARAM_INT, 'Reaction count'),
+                            'names' => new external_value(
+                                PARAM_TEXT,
+                                'Who reacted with this emoji, or empty when names are not shown here'
+                            ),
                         ])
+                    ),
+                    'allnames' => new external_value(
+                        PARAM_TEXT,
+                        'Who reacted with any emoji, for the compact pill; empty when names are not shown here'
                     ),
                 ])
             ),

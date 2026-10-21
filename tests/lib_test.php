@@ -86,4 +86,113 @@ final class lib_test extends \advanced_testcase {
             local_reactions_get_supported_modules()
         );
     }
+
+    /**
+     * Every per-activity option has a site-wide default per module type, and they all start off.
+     *
+     * @covers ::local_reactions_get_default_setting_name
+     * @covers ::local_reactions_get_form_fieldmap
+     */
+    public function test_site_defaults_exist_and_are_off(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/reactions/lib.php');
+        require_once($CFG->libdir . '/adminlib.php');
+        $this->resetAfterTest();
+
+        $this->setAdminUser();
+        $page = admin_get_root(true)->locate('local_reactions');
+
+        $this->assertSame(
+            'forumdefault_compactview_list',
+            local_reactions_get_default_setting_name('forum', 'compactview_list')
+        );
+
+        foreach (array_keys(local_reactions_get_supported_modules()) as $modulename) {
+            foreach (local_reactions_get_form_fieldmap($modulename) as [$dbfield, $newdefault]) {
+                $name = local_reactions_get_default_setting_name($modulename, $dbfield);
+                // The settings page keys each setting by its plugin and name run together.
+                $setting = $page->settings->{'local_reactions' . $name} ?? null;
+                $this->assertInstanceOf(\admin_setting_configcheckbox::class, $setting, "Missing setting '{$name}'");
+                $this->assertSame(0, $setting->get_defaultsetting(), "'{$name}' should default to off");
+                $this->assertSame('0', get_config('local_reactions', $name), "'{$name}' should be off after install");
+                $this->assertSame(0, $newdefault);
+            }
+        }
+    }
+
+    /**
+     * A new activity's form starts from its own module type's site-wide defaults.
+     *
+     * @covers ::local_reactions_apply_form_defaults
+     */
+    public function test_new_activity_form_uses_site_defaults(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/reactions/lib.php');
+        require_once($CFG->libdir . '/formslib.php');
+        $this->resetAfterTest();
+
+        set_config('forumdefault_enabled', 1, 'local_reactions');
+        set_config('forumdefault_compactview_list', 1, 'local_reactions');
+        set_config('forumdefault_onlypeerreactionsgrading', 1, 'local_reactions');
+        set_config('datadefault_shownames', 1, 'local_reactions');
+
+        $mform = new \MoodleQuickForm('test', 'post', '');
+        local_reactions_apply_form_defaults($mform, null, 'forum', true);
+        $this->assertSame([
+            'local_reactions_enabled' => 1,
+            'local_reactions_compactview_list' => 1,
+            'local_reactions_compactview_discuss' => 0,
+            'local_reactions_allowmultiplereactions' => 0,
+            'local_reactions_onlypeerreactionsgrading' => 1,
+            'local_reactions_shownames' => 0,
+        ], $mform->_defaultValues);
+
+        // The database activity has its own defaults; the forum ones do not leak across.
+        $mform = new \MoodleQuickForm('test', 'post', '');
+        local_reactions_apply_form_defaults($mform, null, 'data', true);
+        $this->assertSame([
+            'local_reactions_enabled' => 0,
+            'local_reactions_compactview_list' => 0,
+            'local_reactions_compactview_discuss' => 0,
+            'local_reactions_allowmultiplereactions' => 0,
+            'local_reactions_shownames' => 1,
+        ], $mform->_defaultValues);
+    }
+
+    /**
+     * Editing an existing activity shows its stored settings, never the site-wide defaults, and an
+     * activity with no stored settings is not shown as enabled just because the default is on.
+     *
+     * @covers ::local_reactions_apply_form_defaults
+     */
+    public function test_existing_activity_form_ignores_site_enable_default(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/local/reactions/lib.php');
+        require_once($CFG->libdir . '/formslib.php');
+        $this->resetAfterTest();
+
+        foreach (local_reactions_get_form_fieldmap('forum') as [$dbfield]) {
+            set_config(local_reactions_get_default_setting_name('forum', $dbfield), 1, 'local_reactions');
+        }
+
+        // No stored record: reactions are off, the other options fall back to the defaults.
+        $mform = new \MoodleQuickForm('test', 'post', '');
+        local_reactions_apply_form_defaults($mform, null, 'forum', false);
+        $this->assertSame(0, $mform->_defaultValues['local_reactions_enabled']);
+        $this->assertSame(1, $mform->_defaultValues['local_reactions_compactview_list']);
+        $this->assertSame(1, $mform->_defaultValues['local_reactions_allowmultiplereactions']);
+
+        // A stored record wins over every default.
+        $record = (object) [
+            'enabled' => 0,
+            'compactview_list' => 0,
+            'compactview_discuss' => 0,
+            'allowmultiplereactions' => 0,
+            'onlypeerreactionsgrading' => 0,
+            'shownames' => 0,
+        ];
+        $mform = new \MoodleQuickForm('test', 'post', '');
+        local_reactions_apply_form_defaults($mform, $record, 'forum', false);
+        $this->assertSame([0], array_unique(array_values($mform->_defaultValues)));
+    }
 }

@@ -78,5 +78,26 @@ if ($hassiteconfig) {
         PARAM_INT
     ));
 
+    // Starting values for the Reactions section when a forum or database activity is added.
+    require_once($CFG->dirroot . '/local/reactions/lib.php');
+    foreach (array_keys(local_reactions_get_supported_modules()) as $modulename) {
+        $settings->add(new admin_setting_heading(
+            "local_reactions/{$modulename}defaults",
+            get_string("settings:{$modulename}defaults", 'local_reactions'),
+            get_string("settings:{$modulename}defaults_desc", 'local_reactions')
+        ));
+
+        $elements = local_reactions_get_form_elements($modulename);
+        foreach (local_reactions_get_form_fieldmap($modulename) as $formfield => [$dbfield]) {
+            $stringkey = $elements[$formfield];
+            $settings->add(new admin_setting_configcheckbox(
+                'local_reactions/' . local_reactions_get_default_setting_name($modulename, $dbfield),
+                get_string($stringkey, 'local_reactions'),
+                get_string($stringkey . '_help', 'local_reactions'),
+                0
+            ));
+        }
+    }
+
     $ADMIN->add('localplugins', $settings);
 }

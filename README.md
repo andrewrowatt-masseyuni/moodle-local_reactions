@@ -12,6 +12,7 @@ This local plugin adds an emoji reaction bar to forum posts, database activity e
 -   Multi-react: users can add multiple different emoji to the same item
 -   Per-activity enable/disable via the forum or database activity settings (off by default)
 -   Separate site-wide admin settings for forums, database activities and blog entries
+-   Site-wide defaults for the per-activity settings of new forums and database activities
 -   Admin-configurable emoji set
 -   Anonymous display (counts only), with full user logging in the database
 -   Optional per-activity **Show who reacted (first names only)** tooltip, with separate name limits for students and teachers
@@ -50,6 +51,7 @@ to complete the installation from the command line.
 2.  Enable the content types you want with the **Enable reactions for Forums**, **Enable reactions for Database activities** and **Enable reactions for Blog posts** settings.
 3.  Optionally customise the emoji set (comma-separated `shortcode:emoji` pairs, e.g. `thumbsup:👍,heart:❤️,laugh:😂`).
 4.  To enable reactions on a specific forum or database activity, edit its settings and tick **Enable emoji reactions** under the Reactions heading.
+5.  Optionally set the starting values of those per-activity options under **Defaults for new forums** and **Defaults for new database activities**. They are all off by default, and apply only when an activity is added, not to existing ones.
 
 ## Show who reacted
 

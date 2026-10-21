@@ -1,11 +1,9 @@
 # Changelog
 
-## v1.10.0
-- Added a per-activity **Show who reacted (first names only)** setting for forums and database activities, off by default. With it on, each reaction pill carries a tooltip naming the people behind it, most recent reaction first — for example `You, Jenny (Teacher), Andrew, Bancy, and 2 others`.
-- Thanks to evertonaltas for requesting this.
-- Students see at most three other names. Users with the new `local/reactions:viewallreactornames` capability (teachers and managers by default) see up to the new site-wide **Maximum names shown to teachers** setting, which defaults to 10.
-- Names are shown on forum posts, the forum discussion list, database activity entries and the whole-forum grading screen, where they honour **Only show peer reactions when grading**. Names are not shown in the Moodle App.
-- Fixed a `get_role_users()` developer warning when collecting the students of a course for peer-reaction filtering, which also made that lookup fall back to one query per student role.
+## v1.11.0
+- Added site-wide defaults for the Reactions settings of new activities, under the new **Defaults for new forums** and **Defaults for new database activities** headings in *Site administration > Plugins > Local plugins > Reactions*. Every per-activity option has its own default, and forums and database activities are set separately — for example, reactions can start on for new forums but off for new database activities.
+- All the new defaults are off. Two options that used to start ticked on a new activity now start unticked: **Enable multiple reactions per-user per-post (Recommended)**, and **Only show peer reactions when grading** on forums. Tick their defaults to keep the old behaviour.
+- The defaults apply only when an activity is added. Existing activities keep their settings, and an existing activity that has never had reactions turned on still shows **Enable emoji reactions** unticked, so editing it does not switch reactions on.
 
 ## v1.10.0
 - Added a per-activity **Show who reacted (first names only)** setting for forums and database activities, off by default. With it on, each reaction pill carries a tooltip naming the people behind it, most recent reaction first — for example `You, Jenny (Teacher), Andrew, Bancy, and 2 others`.

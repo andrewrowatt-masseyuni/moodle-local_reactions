@@ -67,24 +67,41 @@ function local_reactions_get_form_elements(string $modulename): array {
 }
 
 /**
+ * Name of the site-wide admin setting holding a module type's default for one per-activity field.
+ *
+ * @param string $modulename The module name, e.g. 'forum' or 'data'.
+ * @param string $dbfield The field on local_reactions_enabled, e.g. 'compactview_list'.
+ * @return string Setting name within the local_reactions config, e.g. 'forumdefault_compactview_list'.
+ */
+function local_reactions_get_default_setting_name(string $modulename, string $dbfield): string {
+    return $modulename . 'default_' . $dbfield;
+}
+
+/**
  * Map of form field => [db field on local_reactions_enabled, default for new activities].
  *
- * Display toggles and the reactor-name list default off; multi-reaction and peer-grading default
- * on. Fields the module does not offer are left out, so saving never overwrites them.
+ * The defaults come from the site-wide "Defaults for new forums" and "Defaults for new database
+ * activities" admin settings, which are all off until an admin changes them. Fields the module
+ * does not offer are left out, so saving never overwrites them.
  *
  * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
  * @return array<string, array{0: string, 1: int}>
  */
 function local_reactions_get_form_fieldmap(string $modulename = 'forum'): array {
-    $fieldmap = [
-        'local_reactions_enabled'                  => ['enabled', 0],
-        'local_reactions_compactview_list'         => ['compactview_list', 0],
-        'local_reactions_compactview_discuss'      => ['compactview_discuss', 0],
-        'local_reactions_allowmultiplereactions'   => ['allowmultiplereactions', 1],
-        'local_reactions_onlypeerreactionsgrading' => ['onlypeerreactionsgrading', 1],
-        'local_reactions_shownames'                => ['shownames', 0],
+    $dbfields = [
+        'local_reactions_enabled'                  => 'enabled',
+        'local_reactions_compactview_list'         => 'compactview_list',
+        'local_reactions_compactview_discuss'      => 'compactview_discuss',
+        'local_reactions_allowmultiplereactions'   => 'allowmultiplereactions',
+        'local_reactions_onlypeerreactionsgrading' => 'onlypeerreactionsgrading',
+        'local_reactions_shownames'                => 'shownames',
     ];
-    return array_intersect_key($fieldmap, local_reactions_get_form_elements($modulename));
+    $fieldmap = [];
+    foreach (array_intersect_key($dbfields, local_reactions_get_form_elements($modulename)) as $formfield => $dbfield) {
+        $setting = local_reactions_get_default_setting_name($modulename, $dbfield);
+        $fieldmap[$formfield] = [$dbfield, get_config('local_reactions', $setting) ? 1 : 0];
+    }
+    return $fieldmap;
 }
 
 /**
@@ -142,7 +159,7 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
 
     $cmid = (int) ($cm->coursemodule ?? 0);
     $record = $cmid ? \local_reactions\manager::get_module_config($cmid) : null;
-    local_reactions_apply_form_defaults($mform, $record, $modulename);
+    local_reactions_apply_form_defaults($mform, $record, $modulename, !$cmid);
 
     // Lock the "allow multiple" checkbox when the activity is already in multi-reaction
     // mode and reactions exist. Once reactions are present you cannot downgrade.
@@ -154,15 +171,31 @@ function local_reactions_coursemodule_standard_elements($formwrapper, $mform) {
 
 /**
  * Apply defaults to every checkbox in the reactions form group, using the stored
- * record when one exists or the per-field "new forum" default otherwise.
+ * record when one exists or the site-wide default for new activities otherwise.
+ *
+ * An existing activity without a stored record has reactions off, so its enable toggle stays
+ * unticked whatever the site-wide default says; otherwise saving the form for an unrelated
+ * change would quietly switch reactions on.
  *
  * @param MoodleQuickForm $mform
  * @param \stdClass|null $record Existing local_reactions_enabled row or null.
  * @param string $modulename The module the form belongs to, e.g. 'forum' or 'data'.
+ * @param bool $isnew True when the form is adding a new activity rather than editing one.
  */
-function local_reactions_apply_form_defaults($mform, ?stdClass $record, string $modulename = 'forum'): void {
+function local_reactions_apply_form_defaults(
+    $mform,
+    ?stdClass $record,
+    string $modulename = 'forum',
+    bool $isnew = true
+): void {
     foreach (local_reactions_get_form_fieldmap($modulename) as $formfield => [$dbfield, $newdefault]) {
-        $value = ($record && isset($record->$dbfield)) ? (!empty($record->$dbfield) ? 1 : 0) : $newdefault;
+        if ($record && isset($record->$dbfield)) {
+            $value = !empty($record->$dbfield) ? 1 : 0;
+        } else if ($dbfield === 'enabled' && !$isnew) {
+            $value = 0;
+        } else {
+            $value = $newdefault;
+        }
         $mform->setDefault($formfield, $value);
     }
 }

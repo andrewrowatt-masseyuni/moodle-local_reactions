@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component    = 'local_reactions';
-$plugin->release      = '1.10.0';
-$plugin->version      = 2026091800;
+$plugin->release      = '1.11.0';
+$plugin->version      = 2026102100;
 $plugin->requires     = 2024100700;
 $plugin->supported    = [405, 501];
 $plugin->maturity     = MATURITY_STABLE;
